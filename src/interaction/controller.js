@@ -19,11 +19,12 @@ const PINCH_ON = 0.30;
 const PINCH_OFF = 0.45;
 
 export class InteractionController {
-  constructor(grabbables) {
+  constructor(grabbables, { onGrab } = {}) {
     this.grabbables = grabbables;   // live array of grabbable meshes (from the scene)
     this.held = new Map();          // handIndex -> { mesh, offset }
     this.xform = null;              // active two-hand transform baseline, or null
     this.pinching = new Map();      // handIndex -> bool (hysteresis state)
+    this.onGrab = onGrab;           // (worldPoint, mesh) => void, on a fresh grab
   }
 
   // Nearest grabbable to a world point, within GRAB_RADIUS. Ignores objects a
@@ -58,6 +59,7 @@ export class InteractionController {
         if (mesh) {
           mesh.userData.heldBy = i;
           this.held.set(i, { mesh, offset: { x: mesh.position.x - world.x, y: mesh.position.y - world.y } });
+          this.onGrab?.(world, mesh);
         }
       } else if (!world && this.held.has(i)) {
         this.held.get(i).mesh.userData.heldBy = null;

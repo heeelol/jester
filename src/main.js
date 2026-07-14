@@ -9,6 +9,8 @@
 
 import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
+import { createEffects } from "./scene/effects.js";
+import { createAudio } from "./audio.js";
 import { createHandTracker } from "./hands/tracker.js";
 import { createHandSmoother } from "./hands/smooth.js";
 import { InteractionController } from "./interaction/controller.js";
@@ -23,13 +25,17 @@ const $ = (id) => document.getElementById(id);
 const randomRoom = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
 
 // Translate a JESTER action into a scene mutation — the single place voice
-// commands touch the world.
-function applyAction(scene, action) {
+// commands touch the world. `fx` = { audio, effects } for sound + particles.
+function applyAction(scene, action, fx) {
   const last = scene.grabbables[scene.grabbables.length - 1];
   switch (action?.command) {
-    case "spawn":   scene.spawn(action.target && action.target !== "all" ? action.target : "reactor"); break;
-    case "dismiss": (action.target === "all" || !last) ? scene.dismissAll() : scene.dismiss(last); break;
-    case "reset":   scene.dismissAll(); break;
+    case "spawn": {
+      const obj = scene.spawn(action.target && action.target !== "all" ? action.target : "reactor");
+      fx.effects.shockwave(obj.position); fx.audio.sfx.spawn();
+      break;
+    }
+    case "dismiss": (action.target === "all" || !last) ? scene.dismissAll() : scene.dismiss(last); fx.audio.sfx.dismiss(); break;
+    case "reset":   scene.dismissAll(); fx.audio.sfx.dismiss(); break;
     case "rotate":  if (last) last.rotation.y += (action.amount || 1) * 0.8; break;
     case "scale":   if (last) last.scale.multiplyScalar(action.amount && action.amount > 0 ? action.amount : 1.3); break;
   }
@@ -39,10 +45,19 @@ async function main() {
   const hud = createHUD();
   const scene = createScene($("scene"));
   const cursors = createCursors(scene.scene);
-  const controller = new InteractionController(scene.grabbables);
+  const effects = createEffects(scene.scene);
+  const audio = createAudio();
+  audio.start(); // within the Initialize-click gesture, so the AudioContext is allowed
+  const fx = { audio, effects };
+  const controller = new InteractionController(scene.grabbables, {
+    onGrab: (p) => { audio.sfx.grab(); effects.burst(p); },
+  });
   const smoother = createHandSmoother();
   const speaker = sentenceSpeaker();
-  scene.spawn("reactor");
+  const reactor = scene.spawn("reactor");
+
+  // A little power-on flourish once a hand source is live.
+  const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(reactor.position); };
 
   let hands = [];       // latest hand landmarks (from phone or local camera)
   let localMode = false;
@@ -62,7 +77,7 @@ async function main() {
       let said = "";
       await askJester(transcript, {
         onSay: (delta) => { said += delta; hud.subtitle(said); speaker.feed(delta); },
-        onAction: (action) => applyAction(scene, action),
+        onAction: (action) => applyAction(scene, action, fx),
         onDone: () => { speaker.end(); hud.status("online"); },
       });
     } catch (err) {
@@ -91,6 +106,7 @@ async function main() {
           $("pair").style.display = "none";
           hud.status("online");
           hud.flash("CONTROLLER LINKED");
+          bootFlourish();
           speak("Controller linked. Try not to embarrass us both, sir.");
         } else if (msg.state === "left") {
           hud.status("standby"); hud.subtitle("Controller disconnected");
@@ -110,17 +126,21 @@ async function main() {
       localMode = true;
       $("pair").style.display = "none";
       hud.status("online");
+      bootFlourish();
       speak("Local camera engaged. I'll pretend not to watch, sir.");
     } catch (err) { console.error(err); alert("Camera failed: " + err.message); }
   });
 
   // Render loop: consume whichever hand source is active, drive scene + cursors.
+  let prev = 0;
   function frame(now) {
     const t = now / 1000;
+    const dt = Math.min(t - prev, 0.05); prev = t;
     if (localMode && tracker) hands = tracker.detect($("video"), now);
     const smoothed = smoother.smooth(hands, t); // de-jittered for steady holograms
     controller.update(smoothed);
     cursors.update(smoothed, t);
+    effects.update(dt);
     hud.drawHands($("overlay"), smoothed);
     hud.handCount(smoothed.map((h) => gestureLabel(h.landmarks)));
     scene.render(t);

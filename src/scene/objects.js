@@ -1,9 +1,10 @@
 // objects.js — the scene, its grabbable holograms, and the render pipeline
-// (bloom post-processing gives everything that luminous hologram haze).
+// (ACES tone-mapping + bloom give everything that luminous hologram haze).
 //
-// Holograms are procedural geometries (no asset files — runs the moment you open
-// the page). Swap any factory below for a GLTF loader later without touching the
-// interaction or voice code: both drive this same small API.
+// Each hologram is a glowing wireframe over a ghost shell. Most are a single
+// low-poly geometry; the "reactor" is a composite arc-reactor (concentric rings
+// + a spinning core), so the object pipeline is generalized to walk an Object3D
+// and update every holo material / wireframe it contains.
 
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -13,16 +14,44 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { makeHoloMaterial } from "./holo.js";
 import { createEnvironment } from "./environment.js";
 
-// Named registry — the vocabulary shared by voice commands and the spawn menu.
-// Kept low-poly so the wireframe overlay reads as clean holographic structure.
+// Single-geometry holograms. The "reactor" is built separately (see buildObject).
 const GEOMETRIES = {
-  reactor: () => new THREE.IcosahedronGeometry(1, 0),
-  helmet:  () => new THREE.TorusKnotGeometry(0.62, 0.22, 120, 10),
-  globe:   () => new THREE.SphereGeometry(1, 18, 12),
-  cube:    () => new THREE.BoxGeometry(1.5, 1.5, 1.5),
+  helmet: () => new THREE.TorusKnotGeometry(0.62, 0.22, 120, 10),
+  globe:  () => new THREE.SphereGeometry(1, 18, 12),
+  cube:   () => new THREE.BoxGeometry(1.5, 1.5, 1.5),
 };
 
 const smootherstep = (t) => t * t * (3 - 2 * t);
+
+// A glowing wireframe over a translucent shell — the base hologram look.
+function makeHolo(geo, color = 0x59d8ff) {
+  const mesh = new THREE.Mesh(geo, makeHoloMaterial(color));
+  const wire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(geo),
+    new THREE.LineBasicMaterial({ color: 0xaef2ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  mesh.add(wire);
+  return mesh;
+}
+
+// Returns { obj, tick? }. `tick(dt)` animates internal parts (e.g. reactor rings).
+function buildObject(name) {
+  if (name === "reactor") {
+    const g = new THREE.Group();
+    const r1 = makeHolo(new THREE.TorusGeometry(1.0, 0.06, 16, 60));
+    const r2 = makeHolo(new THREE.TorusGeometry(0.68, 0.05, 12, 48)); r2.rotation.x = Math.PI / 2;
+    const r3 = makeHolo(new THREE.TorusGeometry(0.88, 0.02, 8, 60));  r3.rotation.y = Math.PI / 2;
+    const core = makeHolo(new THREE.IcosahedronGeometry(0.34, 0), 0xaef2ff);
+    g.add(r1, r2, r3, core);
+    const tick = (dt) => {
+      r1.rotation.z += dt * 0.6; r2.rotation.z -= dt * 0.9;
+      r3.rotation.x += dt * 0.5; core.rotation.y += dt * 1.2;
+    };
+    return { obj: g, tick };
+  }
+  const make = GEOMETRIES[name] || GEOMETRIES.cube;
+  return { obj: makeHolo(make()) };
+}
 
 export function createScene(container) {
   const scene = new THREE.Scene();
@@ -41,8 +70,7 @@ export function createScene(container) {
 
   const environment = createEnvironment(scene);
 
-  // Post-processing: render → bloom → output. Bloom is what sells the hologram
-  // look, blooming the bright additive rims into a soft glow.
+  // Post-processing: render → bloom → output.
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.35, 0.25);
@@ -64,30 +92,28 @@ export function createScene(container) {
   resize();
 
   function spawn(name = "reactor") {
-    const make = GEOMETRIES[name] || GEOMETRIES.reactor;
-    const geo = make();
-    // A ghostly translucent shell (shader) + a bright wireframe of the geometry
-    // edges. The wireframe is what makes it read as a Stark hologram — glowing
-    // structure rather than a solid disc.
-    const mesh = new THREE.Mesh(geo, makeHoloMaterial());
-    const wire = new THREE.LineSegments(
-      new THREE.WireframeGeometry(geo),
-      new THREE.LineBasicMaterial({ color: 0xaef2ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
-    );
-    mesh.add(wire);
-    mesh.position.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 1.5, 0);
-    mesh.scale.setScalar(0.001); // grows in via the birth animation below
-    mesh.userData = { name, heldBy: null, spin: 0.3 + Math.random() * 0.4, born: 0, wire };
-    scene.add(mesh);
-    grabbables.push(mesh);
-    return mesh;
+    const { obj, tick } = buildObject(name);
+
+    // Collect every holo shader material and wireframe so the render loop can
+    // drive them uniformly, whatever the object's internal structure.
+    const holos = [], wires = [];
+    obj.traverse((o) => {
+      if (o.material?.uniforms?.hold) holos.push(o.material);
+      if (o.isLineSegments) wires.push(o.material);
+    });
+
+    obj.position.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 1.5, 0);
+    obj.scale.setScalar(0.001); // grows in via the birth animation below
+    obj.userData = { name, heldBy: null, spin: 0.3 + Math.random() * 0.4, born: 0, hold: 0, holos, wires, tick };
+    scene.add(obj);
+    grabbables.push(obj);
+    return obj;
   }
 
-  function dismiss(mesh) {
-    scene.remove(mesh);
-    mesh.geometry.dispose();
-    mesh.userData.wire?.geometry.dispose();
-    const i = grabbables.indexOf(mesh);
+  function dismiss(obj) {
+    scene.remove(obj);
+    obj.traverse((o) => { o.geometry?.dispose?.(); });
+    const i = grabbables.indexOf(obj);
     if (i >= 0) grabbables.splice(i, 1);
   }
 
@@ -97,23 +123,24 @@ export function createScene(container) {
     const dt = Math.min(time - prev, 0.05); prev = time;
     environment.update(time);
 
-    for (const mesh of grabbables) {
-      const u = mesh.material.uniforms;
-      u.time.value = time;
+    for (const obj of grabbables) {
+      const u = obj.userData;
 
-      // Birth animation: pop in with an overshoot over ~0.45s, then hand control
-      // to gestures.
-      if (mesh.userData.born < 1) {
-        mesh.userData.born = Math.min(mesh.userData.born + dt / 0.45, 1);
-        mesh.scale.setScalar(smootherstep(mesh.userData.born));
+      // Birth pop-in over ~0.45s, then gestures take over.
+      if (u.born < 1) {
+        u.born = Math.min(u.born + dt / 0.45, 1);
+        obj.scale.setScalar(smootherstep(u.born));
       }
 
-      // Grabbed objects flare (hold uniform) and stop their idle drift.
-      const target = mesh.userData.heldBy != null ? 1 : 0;
-      u.hold.value += (target - u.hold.value) * 0.15;
-      mesh.userData.wire.material.opacity = 0.8 + u.hold.value * 0.2;
-      if (mesh.userData.heldBy == null && mesh.userData.born >= 1) {
-        mesh.rotation.y += mesh.userData.spin * dt;
+      // Grabbed objects flare (hold) and stop drifting.
+      const target = u.heldBy != null ? 1 : 0;
+      u.hold += (target - u.hold) * 0.15;
+      for (const m of u.holos) { m.uniforms.time.value = time; m.uniforms.hold.value = u.hold; }
+      for (const w of u.wires) { w.opacity = 0.8 + u.hold * 0.2; }
+
+      if (u.heldBy == null && u.born >= 1) {
+        obj.rotation.y += u.spin * dt;
+        u.tick?.(dt);
       }
     }
 
