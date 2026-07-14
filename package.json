@@ -1,0 +1,14 @@
+{
+  "name": "jester-holographic-interface",
+  "version": "1.0.0",
+  "description": "Gesture-controlled holographic display with a voice-driven JESTER assistant.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/jester.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "openai": "^4.104.0"
+  }
+}
