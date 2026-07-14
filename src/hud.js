@@ -30,10 +30,15 @@ export function createHUD() {
     <button id="hud-mic" style="pointer-events:auto;position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
       background:rgba(4,6,10,.4);color:#59d8ff;border:1px solid #59d8ff;border-radius:30px;padding:13px 30px;
       font-size:14px;letter-spacing:3px;cursor:pointer;box-shadow:0 0 16px rgba(89,216,255,.3);backdrop-filter:blur(4px);transition:all .2s;">🎤 SPEAK</button>
+    <div id="hud-flash" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;">
+      <div id="hud-flash-text" style="font-size:26px;letter-spacing:8px;padding:16px 34px;border:1px solid #59d8ff;border-radius:4px;background:rgba(4,6,10,.5);box-shadow:0 0 40px rgba(89,216,255,.4);"></div>
+    </div>
     <style>
       #hud-dot { animation: hudpulse 1.6s ease-in-out infinite; }
       @keyframes hudpulse { 50% { opacity: .3; transform: scale(.8); } }
       #hud-mic:hover { background: rgba(89,216,255,.15); box-shadow: 0 0 30px rgba(89,216,255,.55); }
+      @keyframes hudflash { 0% { opacity: 0; transform: scale(.9); } 15% { opacity: 1; transform: scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
+      #hud-flash.go { animation: hudflash 2.2s ease forwards; }
     </style>
   `;
 
@@ -41,6 +46,8 @@ export function createHUD() {
   const $status = root.querySelector("#hud-status");
   const $hands = root.querySelector("#hud-hands");
   const $sub = root.querySelector("#hud-sub");
+  const $flash = root.querySelector("#hud-flash");
+  const $flashText = root.querySelector("#hud-flash-text");
 
   const DOT = { listening: "#ffd166", thinking: "#c77dff", error: "#ff5b5b" };
 
@@ -56,6 +63,14 @@ export function createHUD() {
       $hands.textContent = `HANDS · ${labels.length}` + (labels.length ? " · " + labels.join(" ") : "");
     },
     subtitle: (t) => { $sub.textContent = t; },
+
+    // A transient centered banner + pulse (e.g. "CONTROLLER LINKED").
+    flash: (text) => {
+      $flashText.textContent = text;
+      $flash.classList.remove("go");
+      void $flash.offsetWidth; // restart the animation
+      $flash.classList.add("go");
+    },
 
     // Draw the hand skeletons onto the overlay canvas (already CSS-mirrored to
     // match the camera, so we draw in raw normalized coords). shadowBlur gives

@@ -9,16 +9,21 @@
 // The whole thing is stateless except for `held` (what each hand is holding) and
 // `xform` (the two-hand gesture baseline). Everything else is derived each frame.
 
-import { isPinch, pinchPoint } from "../hands/gestures.js";
+import { pinchStrength, pinchPoint } from "../hands/gestures.js";
 import { toWorld } from "./space.js"; // shared hand→world mapping (also used by the cursors)
 
 const GRAB_RADIUS = 1.6; // how close a pinch must be to snap onto an object
+// Hysteresis: pinch must close past ON to grab, and open past OFF to release.
+// The gap between them kills the flicker you'd get from a single threshold.
+const PINCH_ON = 0.30;
+const PINCH_OFF = 0.45;
 
 export class InteractionController {
   constructor(grabbables) {
     this.grabbables = grabbables;   // live array of grabbable meshes (from the scene)
     this.held = new Map();          // handIndex -> { mesh, offset }
     this.xform = null;              // active two-hand transform baseline, or null
+    this.pinching = new Map();      // handIndex -> bool (hysteresis state)
   }
 
   // Nearest grabbable to a world point, within GRAB_RADIUS. Ignores objects a
@@ -35,10 +40,16 @@ export class InteractionController {
 
   // Called once per frame with the current hands.
   update(hands) {
-    // Resolve each hand to a pinch point (or null if not pinching).
-    const pinches = hands.map((h) =>
-      isPinch(h.landmarks) ? toWorld(pinchPoint(h.landmarks)) : null
-    );
+    // Resolve each hand to a pinch point (or null), with hysteresis so a hand
+    // hovering near the threshold doesn't rapidly grab/drop.
+    const pinches = hands.map((h, i) => {
+      const s = pinchStrength(h.landmarks);
+      const now = this.pinching.get(i) ? s < PINCH_OFF : s < PINCH_ON;
+      this.pinching.set(i, now);
+      return now ? toWorld(pinchPoint(h.landmarks)) : null;
+    });
+    // Forget state for hands that are no longer present.
+    for (const i of this.pinching.keys()) if (i >= hands.length) this.pinching.delete(i);
 
     // 1. Grab / release bookkeeping.
     pinches.forEach((world, i) => {

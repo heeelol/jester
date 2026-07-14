@@ -10,10 +10,12 @@
 import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
 import { createHandTracker } from "./hands/tracker.js";
+import { createHandSmoother } from "./hands/smooth.js";
 import { InteractionController } from "./interaction/controller.js";
 import { label as gestureLabel } from "./hands/gestures.js";
 import { createHUD } from "./hud.js";
 import { askJester } from "./voice/jester.js";
+import { QUIPS, pick } from "./voice/quips.js";
 import { listenOnce, speak, sentenceSpeaker } from "./voice/speech.js";
 import { createLink } from "./net/link.js";
 
@@ -38,6 +40,7 @@ async function main() {
   const scene = createScene($("scene"));
   const cursors = createCursors(scene.scene);
   const controller = new InteractionController(scene.grabbables);
+  const smoother = createHandSmoother();
   const speaker = sentenceSpeaker();
   scene.spawn("reactor");
 
@@ -63,7 +66,7 @@ async function main() {
         onDone: () => { speaker.end(); hud.status("online"); },
       });
     } catch (err) {
-      console.error(err); hud.status("error"); speak("Well, that was graceful. Something broke, sir.");
+      console.error(err); hud.status("error"); speak(pick(QUIPS.fallback));
     }
   }
   hud.micButton.addEventListener("click", () => converse());
@@ -87,6 +90,7 @@ async function main() {
         if (msg.state === "joined") {
           $("pair").style.display = "none";
           hud.status("online");
+          hud.flash("CONTROLLER LINKED");
           speak("Controller linked. Try not to embarrass us both, sir.");
         } else if (msg.state === "left") {
           hud.status("standby"); hud.subtitle("Controller disconnected");
@@ -114,10 +118,11 @@ async function main() {
   function frame(now) {
     const t = now / 1000;
     if (localMode && tracker) hands = tracker.detect($("video"), now);
-    controller.update(hands);
-    cursors.update(hands, t);
-    hud.drawHands($("overlay"), hands);
-    hud.handCount(hands.map((h) => gestureLabel(h.landmarks)));
+    const smoothed = smoother.smooth(hands, t); // de-jittered for steady holograms
+    controller.update(smoothed);
+    cursors.update(smoothed, t);
+    hud.drawHands($("overlay"), smoothed);
+    hud.handCount(smoothed.map((h) => gestureLabel(h.landmarks)));
     scene.render(t);
     requestAnimationFrame(frame);
   }
