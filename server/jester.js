@@ -13,7 +13,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import OpenAI, { toFile } from "openai";
+import OpenAI from "openai";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -135,10 +135,24 @@ app.post("/tts", async (req, res) => {
 // Whisper transcription — works where the browser Web Speech API doesn't (i.e.
 // inside Electron), so you can talk to the PC directly.
 app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], limit: "25mb" }), async (req, res) => {
+  if (!req.body || !req.body.length) return res.json({ text: "" });
+  const ct = req.headers["content-type"] || "audio/webm";
+  const ext = /mp3|mpeg/.test(ct) ? "mp3" : "webm";
   try {
-    const file = await toFile(req.body, "audio.webm");
-    const tr = await getClient().audio.transcriptions.create({ file, model: "whisper-1" });
-    res.json({ text: tr.text || "" });
+    // A native Blob has a known length, so undici sets Content-Length and avoids
+    // chunked transfer-encoding — which the transcription endpoint drops
+    // ("Premature close"). This is why we bypass the SDK's uploader here.
+    const form = new FormData();
+    form.append("file", new Blob([req.body], { type: ct }), `audio.${ext}`);
+    form.append("model", "whisper-1");
+    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: form,
+    });
+    if (!r.ok) { console.error("STT http", r.status, (await r.text().catch(() => "")).slice(0, 200)); return res.status(500).json({ text: "" }); }
+    const data = await r.json();
+    res.json({ text: data.text || "" });
   } catch (err) {
     console.error("STT error:", err.message);
     res.status(500).json({ text: "" });
