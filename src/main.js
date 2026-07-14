@@ -19,7 +19,7 @@ import { label as gestureLabel } from "./hands/gestures.js";
 import { createHUD } from "./hud.js";
 import { askJester } from "./voice/jester.js";
 import { QUIPS, pick } from "./voice/quips.js";
-import { listenOnce, speak, sentenceSpeaker } from "./voice/speech.js";
+import { transcribeOnce, speak, sentenceSpeaker } from "./voice/speech.js";
 import { createLink } from "./net/link.js";
 
 const $ = (id) => document.getElementById(id);
@@ -119,8 +119,8 @@ async function main() {
     try {
       let transcript = preset;
       if (transcript == null) {
-        hud.status("listening"); hud.subtitle("…");
-        transcript = await listenOnce({ onInterim: (t) => hud.subtitle(t) });
+        hud.status("listening"); hud.subtitle("Listening…");
+        transcript = await transcribeOnce(); // Whisper — works in Electron too
       }
       if (!transcript) { hud.status("online"); hud.subtitle(""); return; }
 
@@ -152,8 +152,11 @@ async function main() {
   jester?.onExitMainframe?.(() => exitMainframe(false));
 
   // Pairing: generate a room, show the QR, connect as the display.
+  // The phone can't reach localhost, so the phone URL uses a public base when one
+  // is provided (?pub=<tunnel> — set by the Electron shell via JESTER_PUBLIC).
   const room = randomRoom();
-  const phoneURL = `${location.origin}/phone.html?room=${room}`;
+  const phoneBase = new URLSearchParams(location.search).get("pub") || location.origin;
+  const phoneURL = `${phoneBase}/phone.html?room=${room}`;
   $("pair-code").textContent = room;
   $("pair-url").textContent = phoneURL;
   $("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(phoneURL)}`;

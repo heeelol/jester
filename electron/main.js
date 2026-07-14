@@ -6,7 +6,7 @@
 // PC control lives HERE, in a local process — never on a public endpoint. That's
 // what makes controlling your machine safe.
 
-import { app, BrowserWindow, ipcMain, globalShortcut, screen } from "electron";
+import { app, BrowserWindow, ipcMain, globalShortcut, screen, session } from "electron";
 import { exec } from "node:child_process";
 import path from "node:path";
 import http from "node:http";
@@ -56,27 +56,32 @@ function createWindow() {
       sandbox: false,
     },
   });
-  win.loadURL(URL);
+  // JESTER_PUBLIC lets the phone reach us through a tunnel (the phone can't use
+  // localhost). It's passed to the page so the pairing QR points at the tunnel.
+  const pub = process.env.JESTER_PUBLIC;
+  win.loadURL(pub ? `${URL}?pub=${encodeURIComponent(pub)}` : URL);
 }
 
-// Flip between the windowed "browser phase" and the desktop overlay.
+// Flip between the windowed "browser phase" and the desktop overlay. We keep the
+// window at the work area (NOT covering the taskbar) so there's always a visible
+// escape, and register Escape as an extra exit while the overlay is up.
 function setMainframe(on) {
   if (!win) return;
   if (on) {
-    const full = screen.getPrimaryDisplay().bounds; // cover the taskbar too
-    win.setBounds(full);
     win.setAlwaysOnTop(true, "screen-saver");
     win.setIgnoreMouseEvents(true, { forward: true }); // clicks pass to the desktop
     win.setSkipTaskbar(true);
+    globalShortcut.register("Escape", exitMainframeAndNotify);
   } else {
-    const { workArea } = screen.getPrimaryDisplay();
+    globalShortcut.unregister("Escape");
     win.setAlwaysOnTop(false);
     win.setIgnoreMouseEvents(false);
     win.setSkipTaskbar(false);
-    win.setBounds(workArea);
     win.focus();
   }
 }
+function enterMainframeAndNotify() { setMainframe(true); win?.webContents.send("mainframe:enter"); }
+function exitMainframeAndNotify() { setMainframe(false); win?.webContents.send("mainframe:exit"); }
 
 ipcMain.handle("mainframe:set", (_e, on) => { setMainframe(!!on); return { ok: true }; });
 
@@ -106,13 +111,15 @@ ipcMain.handle("os:command", (_e, command, arg) => {
 });
 
 app.whenReady().then(async () => {
+  // Allow mic/camera so Whisper voice + hand tracking work in the desktop app.
+  session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === "media"));
   await ensureServer();
   createWindow();
 
   // Voice + exit work even when the overlay is click-through.
   globalShortcut.register("CommandOrControl+Shift+Space", () => win?.webContents.send("voice:listen"));
-  globalShortcut.register("CommandOrControl+Shift+Return", () => { setMainframe(true); win?.webContents.send("mainframe:enter"); });
-  globalShortcut.register("CommandOrControl+Shift+M", () => { setMainframe(false); win?.webContents.send("mainframe:exit"); });
+  globalShortcut.register("CommandOrControl+Shift+Return", enterMainframeAndNotify);
+  globalShortcut.register("CommandOrControl+Shift+M", exitMainframeAndNotify);
   globalShortcut.register("CommandOrControl+Q", () => app.quit());
 
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

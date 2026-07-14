@@ -13,7 +13,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +108,41 @@ app.post("/jester", async (req, res) => {
     send({ type: "done" });
   }
   res.end();
+});
+
+// ── Text-to-speech ─────────────────────────────────────────────────────────
+// A real JESTER voice (OpenAI TTS) — much better than the browser's robotic
+// default, and it works identically inside the Electron app.
+app.post("/tts", async (req, res) => {
+  const text = (req.body?.text || "").toString().slice(0, 600);
+  if (!text) return res.status(400).end();
+  try {
+    const speech = await getClient().audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "onyx",
+      input: text,
+      instructions: "A witty British butler with dry, playful sarcasm. Crisp, confident, a touch theatrical.",
+    });
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(Buffer.from(await speech.arrayBuffer()));
+  } catch (err) {
+    console.error("TTS error:", err.message);
+    res.status(500).end();
+  }
+});
+
+// ── Speech-to-text ─────────────────────────────────────────────────────────
+// Whisper transcription — works where the browser Web Speech API doesn't (i.e.
+// inside Electron), so you can talk to the PC directly.
+app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], limit: "25mb" }), async (req, res) => {
+  try {
+    const file = await toFile(req.body, "audio.webm");
+    const tr = await getClient().audio.transcriptions.create({ file, model: "whisper-1" });
+    res.json({ text: tr.text || "" });
+  } catch (err) {
+    console.error("STT error:", err.message);
+    res.status(500).json({ text: "" });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
