@@ -54,7 +54,7 @@ async function main() {
     onGrab: (p) => { audio.sfx.grab(); effects.burst(p); },
   });
   const smoother = createHandSmoother();
-  const deck = createDeck(scene.scene, scene.camera);
+  const deck = createDeck(scene.scene, scene.camera, { maxAnisotropy: scene.maxAnisotropy });
   const speaker = sentenceSpeaker();
   const reactor = scene.spawn("reactor");
 
@@ -158,6 +158,8 @@ async function main() {
     // In file-browsing mode gestures drive the deck; otherwise they grab holograms.
     if (deck.active) deck.update(smoothed, dt);
     else controller.update(smoothed);
+    // Sharpen media by cutting the bloom haze while a photo/video is open.
+    scene.setBloom(deck.isOpen ? 0.12 : 0.55);
     cursors.update(smoothed, t);
     effects.update(dt);
     hud.drawHands($("overlay"), smoothed);

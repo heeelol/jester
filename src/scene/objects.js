@@ -147,5 +147,9 @@ export function createScene(container) {
     composer.render();
   }
 
-  return { scene, camera, grabbables, spawn, dismiss, dismissAll, render, GEOMETRIES };
+  return {
+    scene, camera, grabbables, spawn, dismiss, dismissAll, render, GEOMETRIES,
+    maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
+    setBloom: (s) => { bloom.strength = s; }, // dial bloom down while viewing media
+  };
 }
