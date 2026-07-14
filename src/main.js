@@ -76,6 +76,40 @@ async function main() {
   // A little power-on flourish once a hand source is live.
   const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(reactor.position); filesBtn.style.display = "block"; };
 
+  // ── Mainframe (Electron desktop overlay) ─────────────────────────────────
+  // In the desktop app, `window.jester` is present. "Enter the mainframe" flips
+  // the window to a transparent, click-through overlay over the live desktop and
+  // unlocks voice PC control. In a plain browser this all no-ops gracefully.
+  const jester = window.jester;
+  let mainframe = false;
+
+  const enterMainframe = (callNative = true) => {
+    if (mainframe) return;
+    mainframe = true;
+    document.body.classList.add("mainframe");
+    hud.status("mainframe"); hud.flash("MAINFRAME ONLINE"); audio.sfx.boot();
+    if (callNative) jester?.enterMainframe();
+  };
+  const exitMainframe = (callNative = true) => {
+    if (!mainframe) return;
+    mainframe = false;
+    document.body.classList.remove("mainframe");
+    hud.status("online"); audio.sfx.dismiss();
+    if (callNative) jester?.exitMainframe();
+  };
+
+  const PC_CMDS = new Set(["launch_app", "open_url", "show_desktop", "lock_pc"]);
+  const handlePc = (action) => {
+    if (!jester) { speak("The mainframe needs the desktop app, sir — run me with 'npm run app'."); return; }
+    if (!mainframe) { speak("Enter the mainframe first, sir."); return; }
+    switch (action.command) {
+      case "launch_app":   jester.launchApp(action.app || action.target); break;
+      case "open_url":     jester.systemCommand("open_url", action.url); break;
+      case "show_desktop": jester.systemCommand("show_desktop"); break;
+      case "lock_pc":      jester.systemCommand("lock"); break;
+    }
+  };
+
   let hands = [];       // latest hand landmarks (from phone or local camera)
   let localMode = false;
   let tracker = null;
@@ -90,18 +124,32 @@ async function main() {
       }
       if (!transcript) { hud.status("online"); hud.subtitle(""); return; }
 
+      // Mainframe enter/exit is handled locally so the hero moment is 100% reliable.
+      const low = transcript.toLowerCase();
+      if (low.includes("mainframe")) {
+        if (/\b(exit|leave|back|out|close|quit|sandbox)\b/.test(low)) { exitMainframe(); speak("Returning to the sandbox, sir."); }
+        else { enterMainframe(); speak("Entering the mainframe. Do behave, sir."); }
+        hud.subtitle(""); return;
+      }
+
       hud.status("thinking");
       let said = "";
       await askJester(transcript, {
         onSay: (delta) => { said += delta; hud.subtitle(said); speaker.feed(delta); },
-        onAction: (action) => applyAction(scene, action, fx),
-        onDone: () => { speaker.end(); hud.status("online"); },
+        onAction: (action) => { if (PC_CMDS.has(action?.command)) handlePc(action); else applyAction(scene, action, fx); },
+        onDone: () => { speaker.end(); hud.status(mainframe ? "mainframe" : "online"); },
       });
     } catch (err) {
       console.error(err); hud.status("error"); speak(pick(QUIPS.fallback));
     }
   }
   hud.micButton.addEventListener("click", () => converse());
+
+  // Desktop-app hooks: global shortcut for voice (works under the click-through
+  // overlay), and native-driven mainframe enter/exit.
+  jester?.onVoiceListen?.(() => converse());
+  jester?.onEnterMainframe?.(() => enterMainframe(false));
+  jester?.onExitMainframe?.(() => exitMainframe(false));
 
   // Pairing: generate a room, show the QR, connect as the display.
   const room = randomRoom();

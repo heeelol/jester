@@ -29,20 +29,25 @@ Rules of the act:
 - Keep every spoken reply to ONE or TWO short sentences — it's read aloud, so land the joke fast.
 - Be clever, not corny. Never explain the joke. A little dry sarcasm goes a long way.
 - Still actually do what's asked — the comedy is seasoning, not an excuse.
-When the user asks to show, summon, hide, rotate, scale, or reset holograms, ALSO call the
-perform_action function. Available holograms: reactor, helmet, globe, cube. For anything else
-(questions, chat), just riff — no function call.`;
+HOLOGRAMS: when asked to show/summon, hide/dismiss, rotate, scale, or reset holograms, call
+perform_action (reactor, helmet, globe, cube).
+PC CONTROL (relevant once "in the mainframe"): when asked to open/launch an app, show the desktop,
+lock the PC, or open a website, call perform_action with the matching command. Known apps: chrome,
+edge, firefox, spotify, notepad, explorer, calculator, code, terminal, settings, camera, mail.
+For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
   type: "function",
   function: {
     name: "perform_action",
-    description: "Manipulate the holographic display. Call when the user asks to show/summon, hide/dismiss, rotate, scale, or reset holograms.",
+    description: "Manipulate the holographic display OR control the PC (launch apps, show desktop, lock, open a URL).",
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset"] },
-        target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram; 'all' where it makes sense." },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "launch_app", "show_desktop", "lock_pc", "open_url"] },
+        target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
+        app:     { type: "string", description: "App name for launch_app, e.g. spotify, chrome, notepad." },
+        url:     { type: "string", description: "Full https URL for open_url." },
         amount:  { type: "number", description: "Optional magnitude for rotate/scale, e.g. 1.5." },
       },
       required: ["command"],

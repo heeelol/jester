@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "description": "Gesture-controlled holographic display with a voice-driven JESTER assistant.",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
-    "start": "node server/jester.js"
+    "start": "node server/jester.js",
+    "app": "electron ."
   },
   "dependencies": {
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "openai": "^4.104.0",
     "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^43.1.0"
   }
 }

@@ -41,6 +41,18 @@
     #pair-url { font-size: 13px; letter-spacing: 1px; word-break: break-all; max-width: 420px; }
     #pair-code { font-size: 40px; letter-spacing: 10px; margin-left: 10px; }
     .link { color: var(--holo-dim); font-size: 12px; letter-spacing: 2px; text-decoration: underline; cursor: pointer; pointer-events: auto; }
+    /* Mainframe overlay mode: the window goes transparent and the desktop shows
+       through; we hide the 3D scene/camera and keep the HUD chrome + captions. */
+    body.mainframe { background: transparent !important; }
+    body.mainframe #scene, body.mainframe #overlay, body.mainframe #cam,
+    body.mainframe #files-btn, body.mainframe #hud-mic { display: none !important; }
+    body.mainframe #fx .vignette { background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,0.45) 100%); }
+    body.mainframe #fx .scan { opacity: 0.25; }
+    body.mainframe #fx .corner { border-color: rgba(255,138,91,0.85); box-shadow: 0 0 14px rgba(255,138,91,0.5); }
+    body.mainframe #mainframe-badge { display: block; }
+    #mainframe-badge { display: none; position: fixed; top: 22px; left: 50%; transform: translateX(-50%); z-index: 5; pointer-events: none;
+      color: #ff8a5b; letter-spacing: 12px; font-size: 15px; text-shadow: 0 0 14px rgba(255,138,91,0.7); animation: mfpulse 1.8s ease-in-out infinite; }
+    @keyframes mfpulse { 50% { opacity: 0.45; } }
   </style>
 </head>
 <body>
@@ -55,6 +67,7 @@
   </div>
 
   <div id="hud"></div>
+  <div id="mainframe-badge">◆ MAINFRAME ONLINE ◆</div>
 
   <button id="files-btn" style="position:fixed;bottom:30px;left:30px;z-index:6;pointer-events:auto;display:none;
     background:rgba(4,6,10,.45);color:#59d8ff;border:1px solid #59d8ff;border-radius:30px;padding:12px 22px;
