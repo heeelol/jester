@@ -12,6 +12,7 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
 import OpenAI from "openai";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -102,9 +103,54 @@ app.post("/jester", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   if (!process.env.OPENAI_API_KEY) {
     console.warn("\n⚠  OPENAI_API_KEY is not set — voice replies will fail.\n   Put it in a .env file:  OPENAI_API_KEY=sk-...\n");
   }
   console.log(`\n🃏 J.E.S.T.E.R online → http://localhost:${PORT}\n`);
+});
+
+// ── WebSocket relay ────────────────────────────────────────────────────────
+// Pairs a phone (controller) with a display via a shared room code. The phone
+// streams hand landmarks and speech transcripts; the server relays them to the
+// display(s) in the same room. Pure relay — no game state lives here.
+
+const wss = new WebSocketServer({ server, path: "/ws" });
+const rooms = new Map(); // code -> { display:Set<ws>, phone:Set<ws> }
+const roomOf = (code) => rooms.get(code) || (rooms.set(code, { display: new Set(), phone: new Set() }), rooms.get(code));
+const send = (ws, obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
+
+wss.on("connection", (ws) => {
+  ws.on("message", (buf) => {
+    let msg; try { msg = JSON.parse(buf); } catch { return; }
+
+    if (msg.type === "join") {
+      ws.role = msg.role === "phone" ? "phone" : "display";
+      ws.room = String(msg.room || "").toUpperCase();
+      const r = roomOf(ws.room);
+      r[ws.role].add(ws);
+      // Announce presence so each side knows a peer is ready.
+      const peers = ws.role === "phone" ? r.display : r.phone;
+      peers.forEach((p) => send(p, { type: "peer", role: ws.role, state: "joined" }));
+      // Also tell the newcomer whether the other side is already present.
+      const otherPresent = (ws.role === "phone" ? r.display.size : r.phone.size) > 0;
+      send(ws, { type: "peer", role: ws.role === "phone" ? "display" : "phone", state: otherPresent ? "joined" : "waiting" });
+      return;
+    }
+
+    // Relay everything else to the opposite role in the room.
+    const r = rooms.get(ws.room);
+    if (!r) return;
+    const targets = ws.role === "phone" ? r.display : r.phone;
+    targets.forEach((t) => send(t, msg));
+  });
+
+  ws.on("close", () => {
+    const r = rooms.get(ws.room);
+    if (!r) return;
+    r[ws.role]?.delete(ws);
+    const peers = ws.role === "phone" ? r.display : r.phone;
+    peers.forEach((p) => send(p, { type: "peer", role: ws.role, state: "left" }));
+    if (r.display.size === 0 && r.phone.size === 0) rooms.delete(ws.room);
+  });
 });

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>J.E.S.T.E.R — Controller</title>
+  <style>
+    :root { --holo: #59d8ff; --holo-dim: rgba(89,216,255,0.5); --bg: #04060a; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: "Segoe UI", system-ui, sans-serif; color: var(--holo); }
+
+    #video   { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 1; }
+    #overlay { position: fixed; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); z-index: 2; }
+
+    #bar { position: fixed; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; gap: 8px;
+           padding: 14px 18px; font-size: 12px; letter-spacing: 2px; background: linear-gradient(to bottom, rgba(4,6,10,.7), transparent); text-shadow: 0 0 8px rgba(89,216,255,.5); }
+    #dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5b5b; box-shadow: 0 0 8px #ff5b5b; transition: all .3s; }
+    #dot.on { background: var(--holo); box-shadow: 0 0 8px var(--holo); }
+
+    #controls { position: fixed; bottom: 0; left: 0; right: 0; z-index: 3; display: flex; justify-content: center; gap: 14px;
+                padding: 26px; background: linear-gradient(to top, rgba(4,6,10,.75), transparent); }
+    .btn { pointer-events: auto; background: rgba(4,6,10,.5); color: var(--holo); border: 1px solid var(--holo);
+           border-radius: 40px; padding: 16px 26px; font-size: 15px; letter-spacing: 2px; box-shadow: 0 0 16px rgba(89,216,255,.3); }
+    .btn.icon { padding: 16px 20px; }
+
+    #start { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; background: var(--bg); text-align: center; padding: 30px; }
+    #start h1 { font-size: 24px; letter-spacing: 10px; font-weight: 300; margin-left: 10px; }
+    #start .muted { color: var(--holo-dim); font-size: 13px; letter-spacing: 2px; line-height: 1.7; }
+    #start button { background: transparent; color: var(--holo); border: 1px solid var(--holo); padding: 16px 40px; font-size: 15px; letter-spacing: 4px; border-radius: 3px; text-transform: uppercase; box-shadow: 0 0 20px rgba(89,216,255,.3); }
+  </style>
+</head>
+<body>
+  <video id="video" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+
+  <div id="bar"><span id="dot"></span><span id="status">CONNECTING…</span></div>
+
+  <div id="controls">
+    <button id="mic" class="btn">🎤 SPEAK</button>
+    <button id="flip" class="btn icon">⟲</button>
+  </div>
+
+  <div id="start">
+    <h1>J.E.S.T.E.R</h1>
+    <div class="muted">CONTROLLER</div>
+    <button id="go">Start Tracking</button>
+    <div class="muted">Prop up your phone so the camera sees both hands.<br/>Your gestures control the display.</div>
+  </div>
+
+  <script type="module" src="./src/phone.js"></script>
+</body>
+</html>

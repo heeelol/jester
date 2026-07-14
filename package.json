@@ -9,6 +9,7 @@
   "dependencies": {
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
-    "openai": "^4.104.0"
+    "openai": "^4.104.0",
+    "ws": "^8.21.0"
   }
 }

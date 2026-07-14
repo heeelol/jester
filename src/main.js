@@ -1,9 +1,11 @@
-// main.js — boot sequence and the per-frame loop that wires everything together:
-//   webcam → hand tracker → interaction controller → three.js render
-//   mic → JESTER brain → speech + scene actions
+// main.js — the DISPLAY (big screen). It renders the holographic scene and runs
+// JESTER's voice, but takes its hand input from a paired phone over WebSocket:
 //
-// Both the hands and the voice drive the SAME scene API, so "pull up the reactor"
-// and physically grabbing it are just two paths into the same commands.
+//   phone camera → landmarks → server relay → (here) controller + cursors → scene
+//   phone mic    → transcript → server relay → (here) JESTER → speech + actions
+//
+// A single-device fallback ("use this device's camera") lets the same page run
+// standalone with a laptop webcam.
 
 import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
@@ -13,19 +15,13 @@ import { label as gestureLabel } from "./hands/gestures.js";
 import { createHUD } from "./hud.js";
 import { askJester } from "./voice/jester.js";
 import { listenOnce, speak, sentenceSpeaker } from "./voice/speech.js";
+import { createLink } from "./net/link.js";
 
-const video = document.getElementById("video");
-const overlay = document.getElementById("overlay");
-const boot = document.getElementById("boot");
+const $ = (id) => document.getElementById(id);
+const randomRoom = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
 
-async function startCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-  video.srcObject = stream;
-  await video.play();
-}
-
-// Translate a JESTER action into a scene mutation. This is the single place
-// voice commands touch the world.
+// Translate a JESTER action into a scene mutation — the single place voice
+// commands touch the world.
 function applyAction(scene, action) {
   const last = scene.grabbables[scene.grabbables.length - 1];
   switch (action?.command) {
@@ -39,25 +35,24 @@ function applyAction(scene, action) {
 
 async function main() {
   const hud = createHUD();
-  hud.status("booting");
-
-  await startCamera();
-  const scene = createScene(document.getElementById("scene"));
+  const scene = createScene($("scene"));
   const cursors = createCursors(scene.scene);
-  const tracker = await createHandTracker();
   const controller = new InteractionController(scene.grabbables);
   const speaker = sentenceSpeaker();
+  scene.spawn("reactor");
 
-  scene.spawn("reactor"); // something on screen from frame one
-  hud.status("online");
-  speak("Systems online. Do try to keep up, sir.");
+  let hands = [];       // latest hand landmarks (from phone or local camera)
+  let localMode = false;
+  let tracker = null;
 
-  // Mic → JESTER. Listen for one utterance, stream the reply to TTS + scene.
-  async function converse() {
+  // Run one JESTER turn. With `preset` (phone speech) we skip local listening.
+  async function converse(preset) {
     try {
-      hud.status("listening");
-      hud.subtitle("…");
-      const transcript = await listenOnce({ onInterim: (t) => hud.subtitle(t) });
+      let transcript = preset;
+      if (transcript == null) {
+        hud.status("listening"); hud.subtitle("…");
+        transcript = await listenOnce({ onInterim: (t) => hud.subtitle(t) });
+      }
       if (!transcript) { hud.status("online"); hud.subtitle(""); return; }
 
       hud.status("thinking");
@@ -68,20 +63,60 @@ async function main() {
         onDone: () => { speaker.end(); hud.status("online"); },
       });
     } catch (err) {
-      console.error(err);
-      hud.status("error");
-      speak("I'm afraid I ran into a problem.");
+      console.error(err); hud.status("error"); speak("I'm afraid I ran into a problem, sir.");
     }
   }
-  hud.micButton.addEventListener("click", converse);
+  hud.micButton.addEventListener("click", () => converse());
 
-  // Main loop: track hands, drive interaction, render.
+  // Pairing: generate a room, show the QR, connect as the display.
+  const room = randomRoom();
+  const phoneURL = `${location.origin}/phone.html?room=${room}`;
+  $("pair-code").textContent = room;
+  $("pair-url").textContent = phoneURL;
+  $("qr").src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(phoneURL)}`;
+  $("boot").remove();
+  $("pair").style.display = "flex";
+
+  const link = createLink({
+    role: "display",
+    room,
+    onMessage: (msg) => {
+      if (msg.type === "hands") hands = msg.hands || [];
+      else if (msg.type === "speech") converse(msg.transcript);
+      else if (msg.type === "peer" && msg.role === "phone") {
+        if (msg.state === "joined") {
+          $("pair").style.display = "none";
+          hud.status("online");
+          speak("Controller linked. Do try to keep up, sir.");
+        } else if (msg.state === "left") {
+          hud.status("standby"); hud.subtitle("Controller disconnected");
+        }
+      }
+    },
+  });
+
+  // Fallback: drive the display from this device's own webcam.
+  $("use-local").addEventListener("click", async () => {
+    try {
+      const video = $("video");
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      video.srcObject = stream; await video.play();
+      $("cam").style.display = "block";
+      tracker = await createHandTracker();
+      localMode = true;
+      $("pair").style.display = "none";
+      hud.status("online");
+      speak("Local camera engaged, sir.");
+    } catch (err) { console.error(err); alert("Camera failed: " + err.message); }
+  });
+
+  // Render loop: consume whichever hand source is active, drive scene + cursors.
   function frame(now) {
     const t = now / 1000;
-    const hands = tracker.detect(video, now);
+    if (localMode && tracker) hands = tracker.detect($("video"), now);
     controller.update(hands);
     cursors.update(hands, t);
-    hud.drawHands(overlay, hands);
+    hud.drawHands($("overlay"), hands);
     hud.handCount(hands.map((h) => gestureLabel(h.landmarks)));
     scene.render(t);
     requestAnimationFrame(frame);
@@ -89,12 +124,6 @@ async function main() {
   requestAnimationFrame(frame);
 }
 
-document.getElementById("start").addEventListener("click", async () => { // JESTER boot
-  boot.remove();
-  try {
-    await main();
-  } catch (err) {
-    console.error(err);
-    alert("Startup failed: " + err.message + "\n\nUse Chrome, and allow camera + mic.");
-  }
+$("start").addEventListener("click", () => {
+  main().catch((err) => { console.error(err); alert("Startup failed: " + err.message); });
 });

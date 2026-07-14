@@ -3,26 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>J.E.S.T.E.R — Holographic Interface</title>
+  <title>J.E.S.T.E.R — Display</title>
   <style>
     :root { --holo: #59d8ff; --holo-dim: rgba(89,216,255,0.5); --bg: #04060a; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: "Segoe UI", system-ui, sans-serif; color: var(--holo); }
 
-    /* Layer stack (bottom → top): 3D scene · hand overlay · camera monitor · FX · HUD · boot */
     #scene   { position: fixed; inset: 0; z-index: 1; }
     #overlay { position: fixed; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); z-index: 2; pointer-events: none; }
 
-    /* Webcam as a corner "camera monitor" rather than a full-screen selfie. */
-    #cam { position: fixed; bottom: 22px; right: 22px; z-index: 3; width: 220px; aspect-ratio: 4/3;
-           border: 1px solid var(--holo-dim); border-radius: 4px; overflow: hidden;
-           box-shadow: 0 0 24px rgba(89,216,255,0.25); background: #000; }
-    #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.9; }
+    /* Local-camera monitor — only shown in single-device fallback mode. */
+    #cam { position: fixed; bottom: 22px; right: 22px; z-index: 3; width: 220px; aspect-ratio: 4/3; display: none;
+           border: 1px solid var(--holo-dim); border-radius: 4px; overflow: hidden; box-shadow: 0 0 24px rgba(89,216,255,0.25); background: #000; }
+    #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
     #cam .tag { position: absolute; top: 6px; left: 8px; font-size: 10px; letter-spacing: 2px; opacity: 0.85; }
-    #cam .rec { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: #ff5b5b; box-shadow: 0 0 8px #ff5b5b; animation: blink 1.4s infinite; }
-    @keyframes blink { 50% { opacity: 0.25; } }
 
-    /* CRT scanlines + vignette + corner brackets — pure decoration. */
     #fx { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
     #fx .scan { position: absolute; inset: 0; background: repeating-linear-gradient(to bottom, rgba(89,216,255,0.05) 0 1px, transparent 1px 3px); mix-blend-mode: screen; opacity: 0.5; }
     #fx .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.75) 100%); }
@@ -34,45 +29,49 @@
 
     #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; text-shadow: 0 0 8px rgba(89,216,255,0.55); }
 
-    /* Boot screen with a rotating reactor ring. */
-    #boot { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); gap: 40px; }
-    #boot .ring { width: 140px; height: 140px; border-radius: 50%; border: 1px solid var(--holo-dim); border-top-color: var(--holo); animation: spin 2.4s linear infinite; box-shadow: 0 0 30px rgba(89,216,255,0.3), inset 0 0 30px rgba(89,216,255,0.15); position: relative; }
-    #boot .ring::after { content: ""; position: absolute; inset: 18px; border-radius: 50%; border: 1px solid var(--holo-dim); border-bottom-color: var(--holo); animation: spin 1.6s linear infinite reverse; }
+    .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); gap: 34px; text-align: center; }
+    .ring { width: 130px; height: 130px; border-radius: 50%; border: 1px solid var(--holo-dim); border-top-color: var(--holo); animation: spin 2.4s linear infinite; box-shadow: 0 0 30px rgba(89,216,255,0.3), inset 0 0 30px rgba(89,216,255,0.15); position: relative; }
+    .ring::after { content: ""; position: absolute; inset: 18px; border-radius: 50%; border: 1px solid var(--holo-dim); border-bottom-color: var(--holo); animation: spin 1.6s linear infinite reverse; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    #boot h1 { font-size: 34px; letter-spacing: 14px; font-weight: 300; margin-left: 14px; }
-    #boot button {
-      pointer-events: auto; background: transparent; color: var(--holo); border: 1px solid var(--holo);
-      padding: 16px 40px; font-size: 15px; letter-spacing: 5px; border-radius: 3px; cursor: pointer;
-      text-transform: uppercase; box-shadow: 0 0 20px rgba(89,216,255,0.3); transition: all .2s;
-    }
-    #boot button:hover { background: rgba(89,216,255,0.12); box-shadow: 0 0 44px rgba(89,216,255,0.6); }
-    #boot p { position: absolute; bottom: 40px; color: var(--holo-dim); font-size: 12px; letter-spacing: 2px; }
+    h1 { font-size: 32px; letter-spacing: 14px; font-weight: 300; margin-left: 14px; }
+    button, .btn { pointer-events: auto; background: transparent; color: var(--holo); border: 1px solid var(--holo); padding: 15px 38px; font-size: 15px; letter-spacing: 5px; border-radius: 3px; cursor: pointer; text-transform: uppercase; box-shadow: 0 0 20px rgba(89,216,255,0.3); transition: all .2s; }
+    button:hover, .btn:hover { background: rgba(89,216,255,0.12); box-shadow: 0 0 44px rgba(89,216,255,0.6); }
+    .muted { color: var(--holo-dim); font-size: 13px; letter-spacing: 2px; line-height: 1.7; }
+    #qr { width: 220px; height: 220px; background: #fff; padding: 12px; border-radius: 6px; }
+    #pair-url { font-size: 13px; letter-spacing: 1px; word-break: break-all; max-width: 420px; }
+    #pair-code { font-size: 40px; letter-spacing: 10px; margin-left: 10px; }
+    .link { color: var(--holo-dim); font-size: 12px; letter-spacing: 2px; text-decoration: underline; cursor: pointer; pointer-events: auto; }
   </style>
 </head>
 <body>
   <div id="scene"></div>
   <canvas id="overlay"></canvas>
 
-  <div id="cam">
-    <video id="video" playsinline muted></video>
-    <span class="tag">CAM · 01</span>
-    <span class="rec"></span>
-  </div>
+  <div id="cam"><video id="video" playsinline muted></video><span class="tag">CAM · 01</span></div>
 
   <div id="fx">
-    <div class="scan"></div>
-    <div class="vignette"></div>
-    <div class="corner tl"></div><div class="corner tr"></div>
-    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="scan"></div><div class="vignette"></div>
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
   </div>
 
   <div id="hud"></div>
 
-  <div id="boot">
+  <!-- Step 1: user gesture to satisfy autoplay/audio, then we connect. -->
+  <div id="boot" class="screen">
     <div class="ring"></div>
     <h1>J.E.S.T.E.R</h1>
-    <button id="start">Initialize</button>
-    <p>Grant camera + microphone access · Pinch to grab · Two hands to scale &amp; rotate · Click the mic to speak</p>
+    <button id="start">Initialize Display</button>
+    <p class="muted" style="position:absolute;bottom:40px;">Open this page on the big screen · you'll pair your phone next</p>
+  </div>
+
+  <!-- Step 2: pairing panel — scan to connect the phone controller. -->
+  <div id="pair" class="screen" style="display:none;">
+    <div class="muted">SCAN TO PAIR YOUR PHONE CONTROLLER</div>
+    <img id="qr" alt="pairing QR code" />
+    <div>ROOM <span id="pair-code"></span></div>
+    <div id="pair-url" class="muted"></div>
+    <div class="muted">Waiting for controller…</div>
+    <span id="use-local" class="link">or use this device's camera instead</span>
   </div>
 
   <script type="importmap">
