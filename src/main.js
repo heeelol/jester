@@ -10,6 +10,7 @@
 import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
 import { createEffects } from "./scene/effects.js";
+import { createDeck } from "./files/deck.js";
 import { createAudio } from "./audio.js";
 import { createHandTracker } from "./hands/tracker.js";
 import { createHandSmoother } from "./hands/smooth.js";
@@ -53,11 +54,27 @@ async function main() {
     onGrab: (p) => { audio.sfx.grab(); effects.burst(p); },
   });
   const smoother = createHandSmoother();
+  const deck = createDeck(scene.scene, scene.camera);
   const speaker = sentenceSpeaker();
   const reactor = scene.spawn("reactor");
 
+  // Holographic media deck: connect a folder → files fan out as tiles you browse
+  // with point + pinch. While the deck is active, gestures drive the deck (not
+  // the hologram grab) so pinches don't fight.
+  const filesBtn = $("files-btn");
+  filesBtn.addEventListener("click", async () => {
+    if (deck.active) {
+      deck.close(); filesBtn.textContent = "◫ CONNECT FILES";
+      return;
+    }
+    try {
+      const ok = await deck.connect();
+      if (ok) { filesBtn.textContent = "✕ CLOSE FILES"; speak("Behold, your files, sir. Point and pinch."); }
+    } catch { /* user cancelled the folder picker */ }
+  });
+
   // A little power-on flourish once a hand source is live.
-  const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(reactor.position); };
+  const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(reactor.position); filesBtn.style.display = "block"; };
 
   let hands = [];       // latest hand landmarks (from phone or local camera)
   let localMode = false;
@@ -138,7 +155,9 @@ async function main() {
     const dt = Math.min(t - prev, 0.05); prev = t;
     if (localMode && tracker) hands = tracker.detect($("video"), now);
     const smoothed = smoother.smooth(hands, t); // de-jittered for steady holograms
-    controller.update(smoothed);
+    // In file-browsing mode gestures drive the deck; otherwise they grab holograms.
+    if (deck.active) deck.update(smoothed, dt);
+    else controller.update(smoothed);
     cursors.update(smoothed, t);
     effects.update(dt);
     hud.drawHands($("overlay"), smoothed);
