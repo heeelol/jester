@@ -14,11 +14,12 @@ import { makeHoloMaterial } from "./holo.js";
 import { createEnvironment } from "./environment.js";
 
 // Named registry — the vocabulary shared by voice commands and the spawn menu.
+// Kept low-poly so the wireframe overlay reads as clean holographic structure.
 const GEOMETRIES = {
-  reactor: () => new THREE.IcosahedronGeometry(1, 1),
-  helmet:  () => new THREE.TorusKnotGeometry(0.7, 0.25, 128, 16),
-  globe:   () => new THREE.SphereGeometry(1, 24, 16),
-  cube:    () => new THREE.BoxGeometry(1.4, 1.4, 1.4),
+  reactor: () => new THREE.IcosahedronGeometry(1, 0),
+  helmet:  () => new THREE.TorusKnotGeometry(0.62, 0.22, 120, 10),
+  globe:   () => new THREE.SphereGeometry(1, 18, 12),
+  cube:    () => new THREE.BoxGeometry(1.5, 1.5, 1.5),
 };
 
 const smootherstep = (t) => t * t * (3 - 2 * t);
@@ -32,6 +33,10 @@ export function createScene(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x04060a, 1);
+  // Filmic tone-mapping rolls bright additive highlights off gracefully instead
+  // of clipping them to a white blob — essential once bloom is stacked on top.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.95;
   container.appendChild(renderer.domElement);
 
   const environment = createEnvironment(scene);
@@ -40,7 +45,7 @@ export function createScene(container) {
   // look, blooming the bright additive rims into a soft glow.
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 1.15, 0.6, 0.18);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.35, 0.25);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -60,10 +65,19 @@ export function createScene(container) {
 
   function spawn(name = "reactor") {
     const make = GEOMETRIES[name] || GEOMETRIES.reactor;
-    const mesh = new THREE.Mesh(make(), makeHoloMaterial());
+    const geo = make();
+    // A ghostly translucent shell (shader) + a bright wireframe of the geometry
+    // edges. The wireframe is what makes it read as a Stark hologram — glowing
+    // structure rather than a solid disc.
+    const mesh = new THREE.Mesh(geo, makeHoloMaterial());
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0xaef2ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    mesh.add(wire);
     mesh.position.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 1.5, 0);
     mesh.scale.setScalar(0.001); // grows in via the birth animation below
-    mesh.userData = { name, heldBy: null, spin: 0.3 + Math.random() * 0.4, born: 0 };
+    mesh.userData = { name, heldBy: null, spin: 0.3 + Math.random() * 0.4, born: 0, wire };
     scene.add(mesh);
     grabbables.push(mesh);
     return mesh;
@@ -72,6 +86,7 @@ export function createScene(container) {
   function dismiss(mesh) {
     scene.remove(mesh);
     mesh.geometry.dispose();
+    mesh.userData.wire?.geometry.dispose();
     const i = grabbables.indexOf(mesh);
     if (i >= 0) grabbables.splice(i, 1);
   }
@@ -96,6 +111,7 @@ export function createScene(container) {
       // Grabbed objects flare (hold uniform) and stop their idle drift.
       const target = mesh.userData.heldBy != null ? 1 : 0;
       u.hold.value += (target - u.hold.value) * 0.15;
+      mesh.userData.wire.material.opacity = 0.8 + u.hold.value * 0.2;
       if (mesh.userData.heldBy == null && mesh.userData.born >= 1) {
         mesh.rotation.y += mesh.userData.spin * dt;
       }

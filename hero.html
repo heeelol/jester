@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>J.E.S.T.E.R</title>
+  <style>
+    :root { --holo: #59d8ff; --holo-dim: rgba(89,216,255,0.5); --bg: #04060a; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: "Segoe UI", system-ui, sans-serif; color: var(--holo); }
+    #scene { position: fixed; inset: 0; z-index: 1; }
+    .chrome { position: fixed; inset: 0; z-index: 3; pointer-events: none; text-shadow: 0 0 10px rgba(89,216,255,0.6); }
+    .scan { position: absolute; inset: 0; background: repeating-linear-gradient(to bottom, rgba(89,216,255,0.05) 0 1px, transparent 1px 3px); mix-blend-mode: screen; opacity: 0.5; }
+    .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,0.8) 100%); }
+    .corner { position: absolute; width: 30px; height: 30px; border: 1px solid var(--holo-dim); }
+    .tl { top: 22px; left: 22px; border-right: none; border-bottom: none; }
+    .tr { top: 22px; right: 22px; border-left: none; border-bottom: none; }
+    .bl { bottom: 22px; left: 22px; border-right: none; border-top: none; }
+    .br { bottom: 22px; right: 22px; border-left: none; border-top: none; }
+    .topleft { position: absolute; top: 34px; left: 46px; font-size: 14px; letter-spacing: 2px; line-height: 1.9; }
+    .topleft .name { font-size: 17px; letter-spacing: 8px; }
+    .topleft .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--holo); box-shadow: 0 0 8px var(--holo); margin-right: 8px; }
+    .topright { position: absolute; top: 34px; right: 46px; text-align: right; font-size: 12px; letter-spacing: 2px; line-height: 2; opacity: 0.65; }
+    .title { position: absolute; bottom: 96px; left: 0; right: 0; text-align: center; }
+    .title h1 { font-size: 58px; letter-spacing: 22px; font-weight: 300; margin-left: 22px; }
+    .title p { margin-top: 16px; font-size: 17px; letter-spacing: 4px; color: #bfefff; }
+    .cam { position: absolute; bottom: 40px; right: 46px; width: 210px; aspect-ratio: 4/3; border: 1px solid var(--holo-dim); border-radius: 4px; box-shadow: 0 0 24px rgba(89,216,255,0.25); background: linear-gradient(135deg, rgba(89,216,255,0.08), rgba(89,216,255,0.02)); }
+    .cam .tag { position: absolute; top: 8px; left: 10px; font-size: 10px; letter-spacing: 2px; }
+    .cam .rec { position: absolute; top: 9px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: #ff5b5b; box-shadow: 0 0 8px #ff5b5b; }
+  </style>
+</head>
+<body>
+  <div id="scene"></div>
+  <div class="chrome">
+    <div class="scan"></div><div class="vignette"></div>
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+    <div class="topleft"><div class="name">J.E.S.T.E.R</div><div><span class="dot"></span>SYSTEM · ONLINE</div><div style="opacity:.7;">HANDS · 2 · PINCH PINCH</div></div>
+    <div class="topright">PINCH · grab<br/>TWO HANDS · scale + rotate<br/>SPEAK · "pull up the reactor"</div>
+    <div class="cam"><span class="tag">CAM · 01</span><span class="rec"></span></div>
+    <div class="title"><h1>J.E.S.T.E.R</h1><p>Wave your hands. Command the holograms. Endure the jokes.</p></div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/" } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { createScene } from "./src/scene/objects.js";
+    import { makeHoloMaterial } from "./src/scene/holo.js";
+
+    const app = createScene(document.getElementById("scene"));
+    const reactor = app.spawn("reactor"); reactor.position.set(0, 0.3, 0);
+    const helmet  = app.spawn("helmet");  helmet.position.set(-4.0, -0.3, -1.8);
+    const globe   = app.spawn("globe");   globe.position.set(4.0, 0.2, -1.8);
+
+    // Two glowing "pinch cursors" flanking the reactor, as if being held.
+    const ring = (x, y, z) => {
+      const m = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.018, 12, 48), makeHoloMaterial(0x8fecff));
+      m.position.set(x, y, z); m.material.uniforms.hold.value = 0.35; app.scene.add(m); return m;
+    };
+    const c1 = ring(-1.35, 0.7, 1.0), c2 = ring(1.4, -0.15, 1.0);
+
+    function frame(t) {
+      const s = t / 1000;
+      c1.rotation.z = s * 0.6; c2.rotation.z = -s * 0.5;
+      c1.material.uniforms.time.value = s; c2.material.uniforms.time.value = s;
+      app.render(s);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    setTimeout(() => { window.__coverReady = true; }, 1200);
+  </script>
+</body>
+</html>

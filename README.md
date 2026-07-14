@@ -1,5 +1,7 @@
 # J.E.S.T.E.R — Holographic Interface
 
+![J.E.S.T.E.R — wave your hands, command the holograms, endure the jokes](assets/cover.png)
+
 A browser-based Iron Man interface: control 3D holograms with your bare hands via
 webcam hand-tracking, and command a voice-driven JESTER assistant that both talks
 back and reshapes the display.

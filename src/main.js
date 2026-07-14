@@ -63,7 +63,7 @@ async function main() {
         onDone: () => { speaker.end(); hud.status("online"); },
       });
     } catch (err) {
-      console.error(err); hud.status("error"); speak("I'm afraid I ran into a problem, sir.");
+      console.error(err); hud.status("error"); speak("Well, that was graceful. Something broke, sir.");
     }
   }
   hud.micButton.addEventListener("click", () => converse());
@@ -87,7 +87,7 @@ async function main() {
         if (msg.state === "joined") {
           $("pair").style.display = "none";
           hud.status("online");
-          speak("Controller linked. Do try to keep up, sir.");
+          speak("Controller linked. Try not to embarrass us both, sir.");
         } else if (msg.state === "left") {
           hud.status("standby"); hud.subtitle("Controller disconnected");
         }
@@ -106,7 +106,7 @@ async function main() {
       localMode = true;
       $("pair").style.display = "none";
       hud.status("online");
-      speak("Local camera engaged, sir.");
+      speak("Local camera engaged. I'll pretend not to watch, sir.");
     } catch (err) { console.error(err); alert("Camera failed: " + err.message); }
   });
 

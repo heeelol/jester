@@ -35,28 +35,31 @@ const fragment = /* glsl */`
   varying vec3 vPos;
 
   void main() {
-    // Rim light: bright where the surface faces away from the camera.
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 2.2);
+    // Rim light: bright where the surface faces away from the camera. Sharpened
+    // so the glow concentrates on the silhouette and the interior stays see-through.
+    float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 3.0);
 
     // Fine scrolling scanlines in world space.
     float scan  = 0.5 + 0.5 * sin(vWorld.y * 45.0 - time * 2.5);
-    float lines = mix(0.65, 1.0, smoothstep(0.35, 0.65, scan));
+    float lines = mix(0.7, 1.0, smoothstep(0.35, 0.65, scan));
 
-    // A single bright band that rises through the object's local height.
+    // A single band that rises through the object's local height.
     float sweepPos = fract(vPos.y * 0.5 - time * 0.25);
-    float sweep    = smoothstep(0.0, 0.04, sweepPos) * (1.0 - smoothstep(0.04, 0.09, sweepPos));
+    float sweep    = smoothstep(0.0, 0.05, sweepPos) * (1.0 - smoothstep(0.05, 0.11, sweepPos));
 
     // Projector flicker.
-    float flick = 0.92 + 0.08 * sin(time * 34.0);
+    float flick = 0.94 + 0.06 * sin(time * 34.0);
 
-    float base  = 0.12 + fresnel * 0.9;
-    float glow  = base * flick * lines + sweep * 0.8;
-    glow *= 1.0 + hold * 1.4;                 // flare when grabbed
+    // A barely-there volumetric tint — the bright wireframe overlay carries the
+    // structure, so the shell stays a faint haze that never fills into a disc.
+    float body = 0.02;
+    float alpha = (body + fresnel * 0.4) * lines * flick + sweep * 0.16;
+    alpha *= 1.0 + hold * 0.9;                 // flare when grabbed
 
-    vec3 rgb = color * (0.55 + fresnel * 1.7 + hold * 0.6);
-    rgb += vec3(0.9) * sweep;                 // white-hot sweep line
+    vec3 rgb = color * (0.45 + fresnel * 0.8 + hold * 0.35);
+    rgb += vec3(0.3) * sweep;                  // cool-white sweep line
 
-    gl_FragColor = vec4(rgb, glow * opacity);
+    gl_FragColor = vec4(rgb, alpha * opacity);
   }
 `;
 
