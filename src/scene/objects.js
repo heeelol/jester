@@ -59,7 +59,7 @@ export function createScene(container) {
   camera.position.set(0, 0.4, 6);
   camera.lookAt(0, 0, 0);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x04060a, 1);
   // Filmic tone-mapping rolls bright additive highlights off gracefully instead
@@ -79,6 +79,7 @@ export function createScene(container) {
 
   const grabbables = [];
   let prev = 0;
+  let overlay = false; // desktop-overlay mode: transparent, no bloom, no grid
 
   function resize() {
     const w = innerWidth, h = innerHeight;
@@ -144,12 +145,24 @@ export function createScene(container) {
       }
     }
 
-    composer.render();
+    // Overlay mode renders straight to the transparent framebuffer (no bloom pass,
+    // which would fill the alpha) so the desktop shows through behind the model.
+    if (overlay) renderer.render(scene, camera);
+    else composer.render();
+  }
+
+  // Desktop overlay: transparent background + hide the grid/stars (they'd cover
+  // the desktop). The JESTER avatar and any holograms stay visible.
+  function setOverlayMode(on) {
+    overlay = on;
+    renderer.setClearColor(0x04060a, on ? 0 : 1);
+    environment.setVisible(!on);
   }
 
   return {
     scene, camera, grabbables, spawn, dismiss, dismissAll, render, GEOMETRIES,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
     setBloom: (s) => { bloom.strength = s; }, // dial bloom down while viewing media
+    setOverlayMode,
   };
 }

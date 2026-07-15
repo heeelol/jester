@@ -46,8 +46,9 @@
     /* Mainframe overlay mode: the window goes transparent and the desktop shows
        through; we hide the 3D scene/camera and keep the HUD chrome + captions. */
     body.mainframe { background: transparent !important; }
-    body.mainframe #scene, body.mainframe #overlay, body.mainframe #cam,
-    body.mainframe #files-btn, body.mainframe #hud-mic { display: none !important; }
+    /* Keep #scene (the transparent 3D avatar) + #overlay (hand skeleton) visible
+       over the desktop; only hide the windowed-mode chrome. */
+    body.mainframe #cam, body.mainframe #files-btn, body.mainframe #hud-mic { display: none !important; }
     body.mainframe #fx .vignette { background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,0.45) 100%); }
     body.mainframe #fx .scan { opacity: 0.25; }
     body.mainframe #fx .corner { border-color: rgba(255,138,91,0.85); box-shadow: 0 0 14px rgba(255,138,91,0.5); }

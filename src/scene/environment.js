@@ -76,7 +76,8 @@ function makeBackdropRing() {
 }
 
 export function createEnvironment(scene) {
-  scene.fog = new THREE.FogExp2(0x04060a, 0.035);
+  const fog = new THREE.FogExp2(0x04060a, 0.035);
+  scene.fog = fog;
 
   const grid = makeGrid();
   const stars = makeStarfield();
@@ -88,6 +89,11 @@ export function createEnvironment(scene) {
       grid.material.uniforms.time.value = time;
       stars.rotation.y = time * 0.02;
       ring.rotation.z = time * 0.05;
+    },
+    // Hidden in the desktop overlay (the grid/stars would occlude the desktop).
+    setVisible(v) {
+      grid.visible = v; stars.visible = v; ring.visible = v;
+      scene.fog = v ? fog : null;
     },
   };
 }

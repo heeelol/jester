@@ -19,7 +19,8 @@ import { label as gestureLabel } from "./hands/gestures.js";
 import { createHUD } from "./hud.js";
 import { askJester } from "./voice/jester.js";
 import { QUIPS, pick } from "./voice/quips.js";
-import { transcribeOnce, speak, sentenceSpeaker } from "./voice/speech.js";
+import { createVoice } from "./voice/engine.js";
+import { createAvatar } from "./scene/avatar.js";
 import { createLink } from "./net/link.js";
 
 const $ = (id) => document.getElementById(id);
@@ -55,8 +56,12 @@ async function main() {
   });
   const smoother = createHandSmoother();
   const deck = createDeck(scene.scene, scene.camera, { maxAnisotropy: scene.maxAnisotropy });
-  const speaker = sentenceSpeaker();
+  const voice = createVoice();
+  voice.init(); // create the AudioContext within the Initialize-click gesture
+  const speak = (t) => voice.speak(t);
+  const avatar = createAvatar(scene.scene); // JESTER's pulsing presence
   const reactor = scene.spawn("reactor");
+  let turn = 0; // conversation turn id — lets a new utterance interrupt an old reply
 
   // Holographic media deck: connect a folder → files fan out as tiles you browse
   // with point + pinch. While the deck is active, gestures drive the deck (not
@@ -87,6 +92,7 @@ async function main() {
     if (mainframe) return;
     mainframe = true;
     document.body.classList.add("mainframe");
+    scene.setOverlayMode(true); // 3D renders transparent over the live desktop
     hud.status("mainframe"); hud.flash("MAINFRAME ONLINE"); audio.sfx.boot();
     if (callNative) jester?.enterMainframe();
   };
@@ -94,6 +100,7 @@ async function main() {
     if (!mainframe) return;
     mainframe = false;
     document.body.classList.remove("mainframe");
+    scene.setOverlayMode(false);
     hud.status("online"); audio.sfx.dismiss();
     if (callNative) jester?.exitMainframe();
   };
@@ -114,15 +121,23 @@ async function main() {
   let localMode = false;
   let tracker = null;
 
-  // Run one JESTER turn. With `preset` (phone speech) we skip local listening.
+  const idleStatus = () => (mainframe ? "mainframe" : "online");
+
+  // Run one JESTER turn. A fresh utterance (preset from phone/conversation, or a
+  // one-shot recording) INTERRUPTS whatever JESTER is currently saying, and the
+  // turn id guards against a stale reply landing after you've moved on.
   async function converse(preset) {
+    voice.stopSpeaking();            // barge-in: cut off the current reply
+    const myTurn = ++turn;
+    const spk = voice.sentenceSpeaker();
     try {
       let transcript = preset;
       if (transcript == null) {
         hud.status("listening"); hud.subtitle("Listening…");
-        transcript = await transcribeOnce(); // Whisper — works in Electron too
+        transcript = await voice.transcribeOnce();
       }
-      if (!transcript) { hud.status("online"); hud.subtitle(""); return; }
+      if (myTurn !== turn) return;
+      if (!transcript) { hud.status(idleStatus()); hud.subtitle(""); return; }
 
       // Mainframe enter/exit is handled locally so the hero moment is 100% reliable.
       const low = transcript.toLowerCase();
@@ -135,19 +150,41 @@ async function main() {
       hud.status("thinking");
       let said = "";
       await askJester(transcript, {
-        onSay: (delta) => { said += delta; hud.subtitle(said); speaker.feed(delta); },
-        onAction: (action) => { if (PC_CMDS.has(action?.command)) handlePc(action); else applyAction(scene, action, fx); },
-        onDone: () => { speaker.end(); hud.status(mainframe ? "mainframe" : "online"); },
+        onSay: (delta) => { if (myTurn !== turn) return; said += delta; hud.subtitle(said); spk.feed(delta); },
+        onAction: (action) => { if (myTurn !== turn) return; if (PC_CMDS.has(action?.command)) handlePc(action); else applyAction(scene, action, fx); },
+        onDone: () => { if (myTurn !== turn) return; spk.end(); hud.status(idleStatus()); },
       });
     } catch (err) {
+      if (myTurn !== turn) return;
       console.error(err); hud.status("error"); speak(pick(QUIPS.fallback));
     }
   }
-  hud.micButton.addEventListener("click", () => converse());
 
-  // Desktop-app hooks: global shortcut for voice (works under the click-through
-  // overlay), and native-driven mainframe enter/exit.
-  jester?.onVoiceListen?.(() => converse());
+  // Continuous, interruptible conversation using the PC mic (barge-in). Toggle
+  // with the mic button / voice hotkey. Phone speech interrupts too (each phone
+  // utterance calls converse(), which stops the current reply).
+  let convoOn = false;
+  async function toggleConversation() {
+    if (convoOn) {
+      convoOn = false; voice.stopConversation(); voice.stopSpeaking();
+      hud.status(idleStatus()); hud.subtitle("");
+      return;
+    }
+    try {
+      convoOn = true;
+      hud.status("listening"); hud.subtitle("Listening — speak any time, interrupt me freely.");
+      await voice.startConversation({ onTranscript: (t) => converse(t) });
+    } catch (err) {
+      convoOn = false; console.error(err);
+      speak("I can't find a microphone, sir. Use the phone to talk, or check your input device.");
+      hud.status(idleStatus());
+    }
+  }
+  hud.micButton.addEventListener("click", toggleConversation);
+
+  // Desktop-app hooks: global shortcut toggles conversation (works under the
+  // click-through overlay), and native-driven mainframe enter/exit.
+  jester?.onVoiceListen?.(() => toggleConversation());
   jester?.onEnterMainframe?.(() => enterMainframe(false));
   jester?.onExitMainframe?.(() => exitMainframe(false));
 
@@ -213,6 +250,7 @@ async function main() {
     scene.setBloom(deck.isOpen ? 0.12 : 0.55);
     cursors.update(smoothed, t);
     effects.update(dt);
+    avatar.update(voice.outputLevel(), t); // pulse with JESTER's voice
     hud.drawHands($("overlay"), smoothed);
     hud.handCount(smoothed.map((h) => gestureLabel(h.landmarks)));
     scene.render(t);
