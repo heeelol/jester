@@ -134,7 +134,7 @@ app.post("/tts", async (req, res) => {
 app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], limit: "25mb" }), async (req, res) => {
   if (!req.body || !req.body.length) return res.json({ text: "" });
   const ct = req.headers["content-type"] || "audio/webm";
-  const ext = /mp3|mpeg/.test(ct) ? "mp3" : "webm";
+  const ext = /mp4|m4a|aac/.test(ct) ? "mp4" : /mp3|mpeg/.test(ct) ? "mp3" : /wav/.test(ct) ? "wav" : "webm";
   try {
     // A native Blob has a known length, so undici sets Content-Length and avoids
     // chunked transfer-encoding — which the transcription endpoint drops

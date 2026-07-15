@@ -4,8 +4,48 @@
 
 import { createHandTracker } from "./hands/tracker.js";
 import { label as gestureLabel } from "./hands/gestures.js";
-import { listenOnce } from "./voice/speech.js";
 import { createLink } from "./net/link.js";
+
+// Record a spoken utterance and transcribe it via the server's Whisper endpoint.
+// This works on iOS Safari (which has no Web Speech recognition) and doesn't need
+// a PC microphone — the phone is the mic.
+async function recordAndTranscribe(onState) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+  const chunks = [];
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC(); await ac.resume?.();
+  const an = ac.createAnalyser(); an.fftSize = 512;
+  ac.createMediaStreamSource(stream).connect(an);
+  const buf = new Uint8Array(an.fftSize);
+  const START = performance.now(); let lastLoud = START, spoke = false;
+  const MAX = 9000, SIL = 1200, TH = 0.02;
+  return new Promise((resolve) => {
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop()); ac.close?.();
+      if (!chunks.length) return resolve("");
+      const type = rec.mimeType || mime || "audio/webm";
+      try {
+        const r = await fetch("/stt", { method: "POST", headers: { "Content-Type": type }, body: new Blob(chunks, { type }) });
+        const d = await r.json();
+        resolve((d.text || "").trim());
+      } catch { resolve(""); }
+    };
+    rec.start(); onState?.("listening");
+    const tick = () => {
+      if (rec.state !== "recording") return;
+      an.getByteTimeDomainData(buf);
+      let s = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; }
+      const rms = Math.sqrt(s / buf.length), now = performance.now();
+      if (rms > TH) { lastLoud = now; spoke = true; }
+      if (now - START > MAX || (spoke && now - lastLoud > SIL)) return rec.stop();
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
 
 const $ = (id) => document.getElementById(id);
 const room = (new URLSearchParams(location.search).get("room") || "").toUpperCase();
@@ -72,16 +112,20 @@ async function main() {
     onClose: () => setStatus("DISCONNECTED", false),
   });
 
-  // Voice: capture on the phone, let the display speak + act.
+  // Voice: record on the phone → Whisper → send the transcript to the display,
+  // which speaks + acts. Works on any phone (iOS included).
+  let listening = false;
   $("mic").addEventListener("click", async () => {
+    if (listening) return;
+    listening = true;
     try {
-      setStatus("LISTENING…", true);
-      const transcript = await listenOnce();
+      setStatus("LISTENING… speak now", true);
+      const transcript = await recordAndTranscribe();
       if (transcript) link.send({ type: "speech", transcript });
-      setStatus("CONTROLLING DISPLAY", true);
-    } catch {
-      setStatus("VOICE UNSUPPORTED (use Android Chrome)", true);
-    }
+      setStatus(transcript ? "SENT: " + transcript.slice(0, 40) : "CONTROLLING DISPLAY", true);
+    } catch (e) {
+      console.error(e); setStatus("MIC ERROR — allow microphone access", true);
+    } finally { listening = false; }
   });
 
   $("flip").addEventListener("click", async () => {

@@ -55,30 +55,37 @@ export function createDeck(scene, camera, { maxAnisotropy = 1 } = {}) {
     tiles.length = 0; opened = null;
   };
 
-  async function connect() {
-    if (!window.showDirectoryPicker) { alert("Folder access needs Chrome/Edge (File System Access API)."); return false; }
-    const dir = await window.showDirectoryPicker();
-    clear();
-
-    const entries = [];
-    for await (const [name, handle] of dir.entries()) {
-      if (handle.kind !== "file") continue;
-      const kind = IMAGE_RE.test(name) ? "image" : VIDEO_RE.test(name) ? "video" : null;
-      if (kind) entries.push({ name, handle, kind });
-      if (entries.length >= MAX_TILES) break;
-    }
-    if (!entries.length) { alert("No photos or videos found in that folder."); return false; }
-
-    for (let i = 0; i < entries.length; i++) {
-      const { name, handle, kind } = entries[i];
-      const tile = await buildTile(await handle.getFile(), kind, name);
-      tile.mesh.position.copy(tilePosition(i, entries.length));
-      tile.mesh.userData.home = tile.mesh.position.clone();
-      group.add(tile.mesh);
-      tiles.push(tile);
-    }
-    active = true;
-    return true;
+  // Uses a folder <input> (webkitdirectory) rather than showDirectoryPicker — the
+  // input is reliable in Electron/Chromium, the File System Access picker is not.
+  function connect() {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      try { input.webkitdirectory = true; } catch { /* pick individual files */ }
+      input.onchange = async () => {
+        try {
+          const picked = [...(input.files || [])]
+            .filter((f) => IMAGE_RE.test(f.name) || VIDEO_RE.test(f.name))
+            .slice(0, MAX_TILES);
+          if (!picked.length) { alert("No photos or videos in that folder."); return resolve(false); }
+          clear();
+          for (let i = 0; i < picked.length; i++) {
+            const file = picked[i];
+            const kind = IMAGE_RE.test(file.name) ? "image" : "video";
+            const tile = await buildTile(file, kind, file.name);
+            tile.mesh.position.copy(tilePosition(i, picked.length));
+            tile.mesh.userData.home = tile.mesh.position.clone();
+            group.add(tile.mesh);
+            tiles.push(tile);
+          }
+          active = true;
+          resolve(true);
+        } catch (e) { reject(e); }
+      };
+      input.oncancel = () => resolve(false);
+      input.click();
+    });
   }
 
   // Give a tile the aspect ratio of its media (unit plane + per-axis base scale).

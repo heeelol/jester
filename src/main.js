@@ -75,7 +75,7 @@ async function main() {
     try {
       const ok = await deck.connect();
       if (ok) { filesBtn.textContent = "✕ CLOSE FILES"; speak("Behold, your files, sir. Point and pinch."); }
-    } catch { /* user cancelled the folder picker */ }
+    } catch (e) { console.error(e); alert("Couldn't open files: " + (e?.message || e)); }
   });
 
   // A little power-on flourish once a hand source is live.
@@ -176,8 +176,9 @@ async function main() {
       await voice.startConversation({ onTranscript: (t) => converse(t) });
     } catch (err) {
       convoOn = false; console.error(err);
-      speak("I can't find a microphone, sir. Use the phone to talk, or check your input device.");
       hud.status(idleStatus());
+      hud.subtitle("No microphone on this device — talk using your phone.");
+      speak("I can't find a microphone, sir. Talk to me through the phone instead.");
     }
   }
   hud.micButton.addEventListener("click", toggleConversation);
@@ -218,6 +219,16 @@ async function main() {
         }
       }
     },
+  });
+
+  // Continue without any controller (e.g. a PC with no camera): dismiss pairing
+  // and start the session — voice + files + avatar work; hands come later if a
+  // phone pairs.
+  $("skip-pair").addEventListener("click", () => {
+    $("pair").style.display = "none";
+    hud.status("online");
+    bootFlourish();
+    speak("Running without a controller, sir. Voice and files at your service.");
   });
 
   // Fallback: drive the display from this device's own webcam.
