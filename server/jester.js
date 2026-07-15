@@ -13,7 +13,12 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import OpenAI from "openai";
+
+// We call OpenAI over native fetch, not the SDK: the SDK's undici HTTP layer
+// intermittently drops responses under Node 26 ("Premature close"). Native fetch
+// is reliable here. One tiny helper builds the auth headers.
+const OPENAI = "https://api.openai.com/v1";
+const authJSON = () => ({ Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -55,12 +60,6 @@ const ACTION_TOOL = {
   },
 };
 
-// Constructed lazily on first voice request — the OpenAI SDK throws at
-// construction if no key is set, and we don't want that to take down the static
-// server (the hands + holograms run fine without a key).
-let client;
-const getClient = () => (client ??= new OpenAI()); // reads OPENAI_API_KEY
-
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..")));
@@ -73,33 +72,26 @@ app.post("/jester", async (req, res) => {
   const send = (obj) => res.write(JSON.stringify(obj) + "\n");
 
   try {
-    const stream = await getClient().chat.completions.create({
-      model: MODEL,
-      max_tokens: 300,
-      stream: true,
-      tools: [ACTION_TOOL],
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: transcript },
-      ],
+    const r = await fetch(`${OPENAI}/chat/completions`, {
+      method: "POST",
+      headers: authJSON(),
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 300,
+        tools: [ACTION_TOOL],
+        messages: [
+          { role: "system", content: SYSTEM },
+          { role: "user", content: transcript },
+        ],
+      }),
     });
+    if (!r.ok) throw new Error(`chat ${r.status}: ${(await r.text().catch(() => "")).slice(0, 200)}`);
+    const data = await r.json();
 
-    // Streaming assembles two things at once: spoken text (emitted live) and
-    // function-call arguments (accumulated as fragments, parsed at the end).
-    const toolCalls = {}; // index -> { name, args }
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-      if (!delta) continue;
-      if (delta.content) send({ type: "say", text: delta.content });
-      for (const tc of delta.tool_calls || []) {
-        const slot = (toolCalls[tc.index] ??= { name: "", args: "" });
-        if (tc.function?.name) slot.name = tc.function.name;
-        if (tc.function?.arguments) slot.args += tc.function.arguments;
-      }
-    }
-
-    for (const slot of Object.values(toolCalls)) {
-      try { send({ type: "action", action: JSON.parse(slot.args || "{}") }); } catch { /* incomplete args — skip */ }
+    const msg = data.choices?.[0]?.message;
+    if (msg?.content) send({ type: "say", text: msg.content });
+    for (const tc of msg?.tool_calls || []) {
+      try { send({ type: "action", action: JSON.parse(tc.function?.arguments || "{}") }); } catch { /* skip bad args */ }
     }
     send({ type: "done" });
   } catch (err) {
@@ -117,14 +109,19 @@ app.post("/tts", async (req, res) => {
   const text = (req.body?.text || "").toString().slice(0, 600);
   if (!text) return res.status(400).end();
   try {
-    const speech = await getClient().audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "onyx",
-      input: text,
-      instructions: "A witty British butler with dry, playful sarcasm. Crisp, confident, a touch theatrical.",
+    const r = await fetch(`${OPENAI}/audio/speech`, {
+      method: "POST",
+      headers: authJSON(),
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",
+        voice: "onyx",
+        input: text,
+        instructions: "A witty British butler with dry, playful sarcasm. Crisp, confident, a touch theatrical.",
+      }),
     });
+    if (!r.ok) throw new Error(`tts ${r.status}`);
     res.setHeader("Content-Type", "audio/mpeg");
-    res.send(Buffer.from(await speech.arrayBuffer()));
+    res.send(Buffer.from(await r.arrayBuffer()));
   } catch (err) {
     console.error("TTS error:", err.message);
     res.status(500).end();
