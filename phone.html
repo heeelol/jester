@@ -30,6 +30,19 @@
   </style>
 </head>
 <body>
+  <script>
+    (function () {
+      function show(msg) {
+        let d = document.getElementById("errbar");
+        if (!d) { d = document.createElement("div"); d.id = "errbar";
+          d.style.cssText = "position:fixed;bottom:0;left:0;right:0;z-index:99999;background:rgba(140,0,0,.92);color:#fff;font:12px/1.4 monospace;padding:8px 12px;white-space:pre-wrap;max-height:45%;overflow:auto";
+          (document.body || document.documentElement).appendChild(d); }
+        d.textContent = "⚠ " + msg + "\n" + (d.textContent || "");
+      }
+      window.addEventListener("error", (e) => show(e.message + (e.filename ? " @ " + e.filename.split("/").pop() + ":" + e.lineno : "")));
+      window.addEventListener("unhandledrejection", (e) => show("Promise: " + (e.reason && e.reason.message ? e.reason.message : e.reason)));
+    })();
+  </script>
   <video id="video" playsinline muted></video>
   <canvas id="overlay"></canvas>
 
