@@ -59,6 +59,14 @@ async function main() {
   const voice = createVoice();
   voice.init(); // create the AudioContext within the Initialize-click gesture
   const speak = (t) => voice.speak(t);
+
+  // Tell the user (and us) what input hardware this PC actually has.
+  navigator.mediaDevices?.enumerateDevices?.().then((ds) => {
+    const mics = ds.filter((d) => d.kind === "audioinput").length;
+    const cams = ds.filter((d) => d.kind === "videoinput").length;
+    console.log(`[jester] devices: ${mics} mic(s), ${cams} camera(s)`);
+    if (!mics) hud.subtitle("No microphone on this PC — use your phone's mic (🎤 on the phone) to talk.");
+  }).catch(() => {});
   const avatar = createAvatar(scene.scene); // JESTER's pulsing presence
   const reactor = scene.spawn("reactor");
   let turn = 0; // conversation turn id — lets a new utterance interrupt an old reply
