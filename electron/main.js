@@ -116,38 +116,43 @@ ipcMain.handle("os:close", (_e, name) => {
 // SendKeys (Ctrl+L focuses the browser omnibox), one character at a time so the
 // user watches JESTER "type". SendKeys specials are brace-escaped.
 let typeSeq = 0;
+// Resolves when the typing (and Enter) has finished, so callers can sequence the
+// UI after the search is actually submitted.
 function typeSequence(text) {
-  const esc = [...text].map((ch) => ("+^%~(){}[]".includes(ch) ? "{" + ch + "}" : ch));
-  const arr = esc.map((s) => "'" + s.replace(/'/g, "''") + "'").join(",");
-  const ps = [
-    "$w=New-Object -ComObject WScript.Shell",
-    "Start-Sleep -Milliseconds 200",
-    "$w.SendKeys('^l')",           // focus the browser address bar
-    "Start-Sleep -Milliseconds 400",
-    `$a=@(${arr})`,
-    "foreach($c in $a){$w.SendKeys($c);Start-Sleep -Milliseconds 45}",
-    "Start-Sleep -Milliseconds 300",
-    "$w.SendKeys('~')",            // Enter
-  ].join("\n");
-  const tmp = path.join(os.tmpdir(), `jester-type-${process.pid}-${typeSeq++}.ps1`);
-  try {
-    writeFileSync(tmp, ps, "utf8");
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmp}"`, () => { try { unlinkSync(tmp); } catch { /* ignore */ } });
-  } catch (e) { console.error("type failed:", e.message); }
+  return new Promise((resolve) => {
+    const esc = [...text].map((ch) => ("+^%~(){}[]".includes(ch) ? "{" + ch + "}" : ch));
+    const arr = esc.map((s) => "'" + s.replace(/'/g, "''") + "'").join(",");
+    const ps = [
+      "$w=New-Object -ComObject WScript.Shell",
+      "Start-Sleep -Milliseconds 200",
+      "$w.SendKeys('^l')",           // focus the browser address bar
+      "Start-Sleep -Milliseconds 400",
+      `$a=@(${arr})`,
+      "foreach($c in $a){$w.SendKeys($c);Start-Sleep -Milliseconds 45}",
+      "Start-Sleep -Milliseconds 300",
+      "$w.SendKeys('~')",            // Enter
+    ].join("\n");
+    const tmp = path.join(os.tmpdir(), `jester-type-${process.pid}-${typeSeq++}.ps1`);
+    try {
+      writeFileSync(tmp, ps, "utf8");
+      exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmp}"`, () => { try { unlinkSync(tmp); } catch { /* ignore */ } resolve(); });
+    } catch (e) { console.error("type failed:", e.message); resolve(); }
+  });
 }
 
-// Search: open/focus the browser, then visibly type the results URL and Enter.
-ipcMain.handle("os:search", (_e, query, engine) => {
+// Search: open/focus the browser, visibly type the results URL and Enter, and
+// resolve only once that's done (so the gallery can appear after the search).
+ipcMain.handle("os:search", async (_e, query, engine) => {
   const q = String(query || "").trim();
   if (!q) return { ok: false };
   const enc = q.replace(/\s+/g, "+");
   const url = engine === "google" ? `https://www.google.com/search?q=${enc}`
     : engine === "web" ? `https://duckduckgo.com/?q=${enc}`
     : `https://www.youtube.com/results?search_query=${enc}`;
-  // --guest opens a clean window and SKIPS the "who's using Chrome?" profile
-  // picker, so the address bar is focusable and we can type into it.
+  // --guest opens a clean window and SKIPS the "who's using Chrome?" profile picker.
   exec('start "" chrome --guest', () => {});
-  setTimeout(() => typeSequence(url), 2200); // let the guest window come up, then type
+  await new Promise((r) => setTimeout(r, 2200)); // let the guest window come up
+  await typeSequence(url);                        // type + submit
   return { ok: true };
 });
 

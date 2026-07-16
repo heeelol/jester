@@ -156,18 +156,18 @@ async function main() {
 
   async function doYoutubeSearch(query) {
     hud.subtitle("Searching YouTube…");
-    if (jester?.webSearch) jester.webSearch(query, "youtube"); // watch it type the search in the browser
-    try {
-      const r = await fetch(`/youtube?q=${encodeURIComponent(query || "")}`);
-      const { videos } = await r.json();
-      if (!videos || !videos.length) { speak("I found nothing worth watching, sir."); pendingResults = []; results.clear(); return; }
-      pendingResults = videos;
-      results.show(videos);
-      const words = ["one", "two", "three", "four", "five", "six"];
-      const top = videos.slice(0, 3).map((v, i) => `${words[i]}, ${v.title}`).join("; ");
-      speak(`I found a few, sir. ${top}. Which shall I play?`);
-      hud.subtitle("Say “play number two”, or name it.");
-    } catch (e) { console.error(e); speak("The search failed, sir."); }
+    // Fetch results in parallel, but wait for the visible typing to finish before
+    // revealing the gallery — so it types first, THEN the thumbnails appear.
+    const videosPromise = fetch(`/youtube?q=${encodeURIComponent(query || "")}`).then((r) => r.json()).then((d) => d.videos || []).catch(() => []);
+    if (jester?.webSearch) await jester.webSearch(query, "youtube");
+    const videos = await videosPromise;
+    if (!videos.length) { speak("I found nothing worth watching, sir."); pendingResults = []; results.clear(); return; }
+    pendingResults = videos;
+    results.show(videos);
+    const words = ["one", "two", "three", "four", "five", "six"];
+    const top = videos.slice(0, 3).map((v, i) => `${words[i]}, ${v.title}`).join("; ");
+    speak(`I found a few, sir. ${top}. Which shall I play?`);
+    hud.subtitle("Say “play number two”, or name it.");
   }
 
   const WORD_NUM = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
