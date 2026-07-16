@@ -144,8 +144,10 @@ ipcMain.handle("os:search", (_e, query, engine) => {
   const url = engine === "google" ? `https://www.google.com/search?q=${enc}`
     : engine === "web" ? `https://duckduckgo.com/?q=${enc}`
     : `https://www.youtube.com/results?search_query=${enc}`;
-  exec("start chrome", () => {});          // open/focus Chrome
-  setTimeout(() => typeSequence(url), 1500); // let it focus, then type
+  // --guest opens a clean window and SKIPS the "who's using Chrome?" profile
+  // picker, so the address bar is focusable and we can type into it.
+  exec('start "" chrome --guest', () => {});
+  setTimeout(() => typeSequence(url), 2200); // let the guest window come up, then type
   return { ok: true };
 });
 
