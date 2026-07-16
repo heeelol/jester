@@ -163,8 +163,8 @@ app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], li
     form.append("file", new Blob([req.body], { type: ct }), `audio.${ext}`);
     form.append("model", "gpt-4o-transcribe");  // far more accurate than whisper-1
     form.append("language", "en");
-    // Bias recognition toward JESTER's actual vocabulary.
-    form.append("prompt", "Commands for the JESTER assistant: enter the mainframe, exit the mainframe, open Spotify, open Discord, open Chrome, open Notepad, close Discord, close Spotify, show my desktop, lock the PC, pull up the reactor, scroll, focus, open, close.");
+    // Bias recognition toward JESTER's actual command vocabulary.
+    form.append("prompt", "Voice commands for the JESTER assistant. Likely phrases: enter the mainframe, exit the mainframe, open Spotify, open Discord, open Chrome, open Notepad, close Discord, close Spotify, play, pause, next track, previous track, turn up the volume, turn down the volume, mute, full screen, fullscreen, minimize, maximize, show my desktop, lock the PC, search YouTube for, search the web for, play number one, play number two, play the first one, move to the top left, top right, bottom left, bottom right, center, pull up the reactor.");
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
