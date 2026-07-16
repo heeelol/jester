@@ -156,6 +156,7 @@ async function main() {
 
   async function doYoutubeSearch(query) {
     hud.subtitle("Searching YouTube…");
+    if (jester?.webSearch) jester.webSearch(query, "youtube"); // watch it type the search in the browser
     try {
       const r = await fetch(`/youtube?q=${encodeURIComponent(query || "")}`);
       const { videos } = await r.json();
