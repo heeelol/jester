@@ -44,8 +44,11 @@ whatsapp, telegram, steam, slack.
 MOVE YOURSELF: when asked to move/reposition, call perform_action command "move" with a position
 (top-left, top-right, bottom-left, bottom-right, center, left, right, top, bottom).
 WEB / YOUTUBE SEARCH: when asked to find/search/look up something online or on YouTube, call
-perform_action command "web_search" with the query and engine (youtube, google, or web). You will
-visibly type it into the browser.
+perform_action command "web_search" with the query and engine (youtube, google, or web). For
+YouTube you then present the results and the user picks one to play.
+MEDIA & WINDOW: map spoken controls to commands — turn up/down volume → volume_up/volume_down;
+mute → mute; play or pause (Spotify or a video) → play_pause; next/previous track → next_track/
+previous_track; fullscreen → fullscreen; minimize → minimize; maximize → maximize.
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -56,7 +59,7 @@ const ACTION_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url", "web_search"] },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url", "web_search", "volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"] },
         target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
         app:     { type: "string", description: "App name for launch_app/close_app, e.g. spotify, discord, chrome." },
         url:     { type: "string", description: "Full https URL for open_url." },

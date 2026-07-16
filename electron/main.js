@@ -160,6 +160,33 @@ ipcMain.handle("os:open", (_e, url) => {
   return { ok: true };
 });
 
+// Media / window / volume control. Volume + play-pause use global media virtual
+// keys (no focus needed); fullscreen/minimize send keys to the focused window.
+function runPS(script) {
+  const tmp = path.join(os.tmpdir(), `jester-ps-${process.pid}-${typeSeq++}.ps1`);
+  try { writeFileSync(tmp, script, "utf8"); exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmp}"`, () => { try { unlinkSync(tmp); } catch { /* ignore */ } }); }
+  catch (e) { console.error("ps failed:", e.message); }
+}
+const KBD = `$s='[DllImport("user32.dll")]public static extern void keybd_event(byte b,byte k,uint f,int e);';$t=Add-Type -MemberDefinition $s -Name Kbd -Namespace Win -PassThru;`;
+const sendVK = (code, times = 1) => runPS(`${KBD}1..${times}|%{$t::keybd_event(${code},0,0,0);$t::keybd_event(${code},0,2,0)}`);
+const sendKeys = (keys) => runPS(`$w=New-Object -ComObject WScript.Shell;$w.SendKeys('${keys}')`);
+
+ipcMain.handle("os:media", (_e, action) => {
+  switch (action) {
+    case "volume_up":     sendVK(0xAF, 5); break;
+    case "volume_down":   sendVK(0xAE, 5); break;
+    case "mute":          sendVK(0xAD, 1); break;
+    case "play_pause":    sendVK(0xB3, 1); break; // controls Spotify / active media
+    case "next_track":    sendVK(0xB0, 1); break;
+    case "previous_track":sendVK(0xB1, 1); break;
+    case "fullscreen":    sendKeys("f"); break;   // YouTube video fullscreen
+    case "minimize":      sendKeys("% n"); break; // Alt+Space, n
+    case "maximize":      sendKeys("% x"); break; // Alt+Space, x
+    default: return { ok: false };
+  }
+  return { ok: true };
+});
+
 ipcMain.handle("os:command", (_e, command, arg) => {
   switch (command) {
     case "show_desktop":

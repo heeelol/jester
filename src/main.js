@@ -134,10 +134,12 @@ async function main() {
     if (callNative) jester?.exitMainframe();
   };
 
-  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc", "web_search"]);
+  const MEDIA = new Set(["volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"]);
+  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc", "web_search", ...MEDIA]);
   const handlePc = (action) => {
     if (!jester) { speak("The mainframe needs the desktop app, sir — run me with 'npm run app'."); return; }
     if (!mainframe) { speak("Enter the mainframe first, sir."); return; }
+    if (MEDIA.has(action.command)) { jester.media(action.command); return; }
     switch (action.command) {
       case "launch_app":   jester.launchApp(action.app || action.target); break;
       case "close_app":    jester.closeApp(action.app || action.target); break;
