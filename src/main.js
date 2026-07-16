@@ -22,6 +22,7 @@ import { QUIPS, pick } from "./voice/quips.js";
 import { createVoice } from "./voice/engine.js";
 import { createAvatar } from "./scene/avatar.js";
 import { createLink } from "./net/link.js";
+import { report } from "./report.js";
 
 const $ = (id) => document.getElementById(id);
 const randomRoom = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
@@ -100,8 +101,13 @@ async function main() {
     if (mainframe) return;
     mainframe = true;
     document.body.classList.add("mainframe");
-    scene.setOverlayMode(true); // 3D renders transparent over the live desktop
+    scene.setOverlayMode(true);                                   // transparent over the desktop
+    avatar.object.position.set(3.6, 1.9, 0); avatar.object.scale.setScalar(0.5); // tuck into the top-right
     hud.status("mainframe"); hud.flash("MAINFRAME ONLINE"); audio.sfx.boot();
+    hud.subtitle("Listening — just speak. e.g. “open spotify”, “open discord”.");
+    // Voice-activated: no clicking. Continuous listening with barge-in.
+    voice.startConversation({ onTranscript: (tt) => converse(tt) })
+      .catch((e) => { console.error(e); hud.subtitle("No microphone here — use the phone’s 🎤."); });
     if (callNative) jester?.enterMainframe();
   };
   const exitMainframe = (callNative = true) => {
@@ -109,7 +115,9 @@ async function main() {
     mainframe = false;
     document.body.classList.remove("mainframe");
     scene.setOverlayMode(false);
-    hud.status("online"); audio.sfx.dismiss();
+    avatar.object.position.set(0, 1.35, 0); avatar.object.scale.setScalar(1);
+    voice.stopConversation(); voice.stopSpeaking();
+    hud.status("online"); hud.subtitle(""); audio.sfx.dismiss();
     if (callNative) jester?.exitMainframe();
   };
 
@@ -146,6 +154,7 @@ async function main() {
       }
       if (myTurn !== turn) return;
       if (!transcript) { hud.status(idleStatus()); hud.subtitle(""); return; }
+      hud.userSaid(transcript); // show what you said
 
       // Mainframe enter/exit is handled locally so the hero moment is 100% reliable.
       const low = transcript.toLowerCase();
@@ -267,18 +276,24 @@ async function main() {
   function frame(now) {
     const t = now / 1000;
     const dt = Math.min(t - prev, 0.05); prev = t;
-    if (localMode && tracker) hands = tracker.detect($("video"), now);
-    const smoothed = smoother.smooth(hands, t); // de-jittered for steady holograms
-    // In file-browsing mode gestures drive the deck; otherwise they grab holograms.
-    if (deck.active) deck.update(smoothed, dt);
-    else controller.update(smoothed);
-    // Sharpen media by cutting the bloom haze while a photo/video is open.
-    scene.setBloom(deck.isOpen ? 0.12 : 0.55);
-    cursors.update(smoothed, t);
+    // In the mainframe overlay there is no hand tracking — it's voice-only, and
+    // the JESTER avatar sits in the corner. Otherwise, drive hands normally.
+    if (!mainframe) {
+      if (localMode && tracker) hands = tracker.detect($("video"), now);
+      const smoothed = smoother.smooth(hands, t); // de-jittered for steady holograms
+      if (deck.active) deck.update(smoothed, dt);
+      else controller.update(smoothed);
+      scene.setBloom(deck.isOpen ? 0.12 : 0.55);
+      cursors.update(smoothed, t);
+      hud.drawHands($("overlay"), smoothed);
+      hud.handCount(smoothed.map((h) => gestureLabel(h.landmarks)));
+    } else {
+      cursors.update([], t);            // hide pinch cursors
+      hud.drawHands($("overlay"), []);  // clear the hand skeleton
+      hud.handCount([]);
+    }
     effects.update(dt);
     avatar.update(voice.outputLevel(), t); // pulse with JESTER's voice
-    hud.drawHands($("overlay"), smoothed);
-    hud.handCount(smoothed.map((h) => gestureLabel(h.landmarks)));
     scene.render(t);
     requestAnimationFrame(frame);
   }

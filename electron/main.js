@@ -22,10 +22,13 @@ let win;
 // Allowlisted apps only — no arbitrary command execution.
 const APPS = {
   chrome: "start chrome", edge: "start msedge", firefox: "start firefox",
-  spotify: "start spotify:", notepad: "start notepad", explorer: "start explorer",
-  calculator: "start calc", calc: "start calc", code: "start code",
-  terminal: "start wt", cmd: "start cmd", settings: "start ms-settings:",
-  camera: "start microsoft.windows.camera:", mail: "start outlookmail:",
+  spotify: "start spotify:", discord: "start discord://",
+  notepad: "start notepad", explorer: "start explorer", files: "start explorer",
+  calculator: "start calc", calc: "start calc", code: "start code", vscode: "start code",
+  terminal: "start wt", cmd: "start cmd", powershell: "start powershell",
+  settings: "start ms-settings:", camera: "start microsoft.windows.camera:",
+  mail: "start outlookmail:", whatsapp: "start whatsapp:", telegram: "start tg://",
+  steam: "start steam://", slack: "start slack://",
 };
 
 const ping = () => new Promise((resolve) => {

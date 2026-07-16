@@ -37,8 +37,9 @@ Rules of the act:
 HOLOGRAMS: when asked to show/summon, hide/dismiss, rotate, scale, or reset holograms, call
 perform_action (reactor, helmet, globe, cube).
 PC CONTROL (relevant once "in the mainframe"): when asked to open/launch an app, show the desktop,
-lock the PC, or open a website, call perform_action with the matching command. Known apps: chrome,
-edge, firefox, spotify, notepad, explorer, calculator, code, terminal, settings, camera, mail.
+lock the PC, or open a website, call perform_action with command "launch_app" and the app name. Known
+apps: chrome, edge, firefox, spotify, discord, notepad, explorer, calculator, code, terminal,
+powershell, settings, camera, mail, whatsapp, telegram, steam, slack.
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -63,6 +64,13 @@ const ACTION_TOOL = {
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..")));
+
+// Client telemetry — lets us see what the browser/Electron renderer is doing
+// (button clicks, device counts, errors) from the server log during debugging.
+app.post("/log", (req, res) => {
+  console.log("[client]", JSON.stringify(req.body).slice(0, 400));
+  res.json({ ok: true });
+});
 
 app.post("/jester", async (req, res) => {
   const transcript = (req.body?.transcript || "").toString().slice(0, 500);

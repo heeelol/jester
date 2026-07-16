@@ -26,6 +26,7 @@ export function createHUD() {
     <div style="position:absolute;top:26px;right:56px;text-align:right;font-size:11px;letter-spacing:2px;line-height:1.9;opacity:.6;">
       PINCH · grab<br/>TWO HANDS · scale + rotate<br/>SPEAK · "pull up the reactor"
     </div>
+    <div id="hud-user" style="position:absolute;bottom:134px;left:0;right:0;text-align:center;font-size:16px;letter-spacing:1px;color:#bfefff;opacity:.9;min-height:20px;padding:0 40px;"></div>
     <div id="hud-sub" style="position:absolute;bottom:96px;left:0;right:0;text-align:center;font-size:22px;letter-spacing:1px;min-height:30px;padding:0 40px;"></div>
     <button id="hud-mic" style="pointer-events:auto;position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
       background:rgba(4,6,10,.4);color:#59d8ff;border:1px solid #59d8ff;border-radius:30px;padding:13px 30px;
@@ -46,6 +47,7 @@ export function createHUD() {
   const $status = root.querySelector("#hud-status");
   const $hands = root.querySelector("#hud-hands");
   const $sub = root.querySelector("#hud-sub");
+  const $user = root.querySelector("#hud-user");
   const $flash = root.querySelector("#hud-flash");
   const $flashText = root.querySelector("#hud-flash-text");
 
@@ -63,6 +65,7 @@ export function createHUD() {
       $hands.textContent = `HANDS · ${labels.length}` + (labels.length ? " · " + labels.join(" ") : "");
     },
     subtitle: (t) => { $sub.textContent = t; },
+    userSaid: (t) => { $user.textContent = t ? "“" + t + "”" : ""; },
 
     // A transient centered banner + pulse (e.g. "CONTROLLER LINKED").
     flash: (text) => {
