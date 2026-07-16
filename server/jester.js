@@ -176,6 +176,54 @@ app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], li
   }
 });
 
+// ── YouTube search (no API key) ────────────────────────────────────────────
+// Fetches the results page and parses the embedded ytInitialData JSON to get the
+// top videos (title, id, channel, duration, thumbnail).
+app.get("/youtube", async (req, res) => {
+  const q = (req.query.q || "").toString().slice(0, 150);
+  if (!q) return res.json({ videos: [] });
+  try {
+    const r = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "en-US,en;q=0.9" },
+    });
+    const html = await r.text();
+    const m = html.match(/ytInitialData\s*=\s*(\{.+?\})\s*;\s*<\/script>/s);
+    if (!m) return res.json({ videos: [] });
+    const data = JSON.parse(m[1]);
+    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const videos = sections
+      .flatMap((s) => s.itemSectionRenderer?.contents || [])
+      .filter((it) => it.videoRenderer?.videoId)
+      .slice(0, 6)
+      .map((it) => {
+        const v = it.videoRenderer;
+        return {
+          videoId: v.videoId,
+          title: v.title?.runs?.[0]?.text || "",
+          channel: v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || "",
+          duration: v.lengthText?.simpleText || "",
+          thumbnail: `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`,
+        };
+      });
+    res.json({ videos });
+  } catch (err) {
+    console.error("youtube error:", err.message);
+    res.json({ videos: [] });
+  }
+});
+
+// Same-origin image proxy for YouTube thumbnails (so they can be used as WebGL
+// textures without cross-origin taint).
+app.get("/img", async (req, res) => {
+  const u = (req.query.u || "").toString();
+  if (!/^https:\/\/i\.ytimg\.com\//.test(u)) return res.status(400).end();
+  try {
+    const r = await fetch(u);
+    res.setHeader("Content-Type", r.headers.get("content-type") || "image/jpeg");
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch { res.status(502).end(); }
+});
+
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   if (!process.env.OPENAI_API_KEY) {

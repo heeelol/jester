@@ -12,6 +12,7 @@ import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
 import { createEffects } from "./scene/effects.js";
 import { createDeck } from "./files/deck.js";
+import { createResults } from "./scene/results.js";
 import { createAudio } from "./audio.js";
 import { createHandTracker } from "./hands/tracker.js";
 import { createHandSmoother } from "./hands/smooth.js";
@@ -127,6 +128,7 @@ async function main() {
     document.body.classList.remove("mainframe");
     scene.setOverlayMode(false);
     avatarTarget.set(0, 1.35, 0); avatar.object.scale.setScalar(1);
+    results.clear(); pendingResults = [];
     voice.stopConversation(); voice.stopSpeaking();
     hud.status("online"); hud.subtitle(""); audio.sfx.dismiss();
     if (callNative) jester?.exitMainframe();
@@ -145,6 +147,45 @@ async function main() {
       case "web_search":   jester.webSearch(action.query, action.engine); break;
     }
   };
+
+  // ── YouTube search: fetch results, show thumbnails, choose by voice ──────
+  const results = createResults(scene.scene, { maxAnisotropy: scene.maxAnisotropy });
+  let pendingResults = [];
+
+  async function doYoutubeSearch(query) {
+    hud.subtitle("Searching YouTube…");
+    try {
+      const r = await fetch(`/youtube?q=${encodeURIComponent(query || "")}`);
+      const { videos } = await r.json();
+      if (!videos || !videos.length) { speak("I found nothing worth watching, sir."); pendingResults = []; results.clear(); return; }
+      pendingResults = videos;
+      results.show(videos);
+      const words = ["one", "two", "three", "four", "five", "six"];
+      const top = videos.slice(0, 3).map((v, i) => `${words[i]}, ${v.title}`).join("; ");
+      speak(`I found a few, sir. ${top}. Which shall I play?`);
+      hud.subtitle("Say “play number two”, or name it.");
+    } catch (e) { console.error(e); speak("The search failed, sir."); }
+  }
+
+  const WORD_NUM = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+  function pickResult(transcript) {
+    const low = transcript.toLowerCase();
+    let idx = null;
+    const num = low.match(/\b(\d+)\b/); if (num) idx = parseInt(num[1], 10);
+    for (const [w, nn] of Object.entries(WORD_NUM)) if (new RegExp(`\\b${w}\\b`).test(low)) idx = nn;
+    if (/\blast\b/.test(low)) idx = pendingResults.length;
+    if (idx && idx >= 1 && idx <= pendingResults.length) return pendingResults[idx - 1];
+    const words = low.split(/\W+/).filter((w) => w.length > 3);
+    let best = null, score = 0;
+    for (const v of pendingResults) { const tl = v.title.toLowerCase(); let s = 0; for (const w of words) if (tl.includes(w)) s++; if (s > score) { score = s; best = v; } }
+    return score >= 1 ? best : null;
+  }
+
+  function playVideo(v) {
+    const url = `https://www.youtube.com/watch?v=${v.videoId}`;
+    if (jester?.openInBrowser) jester.openInBrowser(url); else window.open(url, "_blank");
+    pendingResults = []; results.clear();
+  }
 
   let hands = [];       // latest hand landmarks (from phone or local camera)
   let localMode = false;
@@ -169,6 +210,12 @@ async function main() {
       if (!transcript) { hud.status(idleStatus()); hud.subtitle(""); return; }
       hud.userSaid(transcript); // show what you said
 
+      // Choosing from YouTube results ("play number two", or by name).
+      if (pendingResults.length) {
+        const chosen = pickResult(transcript);
+        if (chosen) { playVideo(chosen); speak(`Playing ${chosen.title}, sir.`); hud.subtitle(""); return; }
+      }
+
       // Mainframe enter/exit is handled locally so the hero moment is 100% reliable.
       const low = transcript.toLowerCase();
       if (low.includes("mainframe")) {
@@ -191,6 +238,10 @@ async function main() {
             else if (action.app) action.command = "launch_app";
           }
           if (action?.command === "move") moveAvatar(action.position || action.target);
+          else if (action?.command === "web_search") {
+            if ((action.engine || "youtube") === "youtube") doYoutubeSearch(action.query);
+            else handlePc(action); // google/web → visible browser typing
+          }
           else if (PC_CMDS.has(action?.command)) handlePc(action);
           else applyAction(scene, action, fx);
         },

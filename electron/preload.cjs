@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("jester", {
   launchApp: (name) => ipcRenderer.invoke("os:launch", name),
   closeApp: (name) => ipcRenderer.invoke("os:close", name),
   webSearch: (query, engine) => ipcRenderer.invoke("os:search", query, engine),
+  openInBrowser: (url) => ipcRenderer.invoke("os:open", url),
   systemCommand: (command, arg) => ipcRenderer.invoke("os:command", command, arg),
   onVoiceListen: (cb) => ipcRenderer.on("voice:listen", () => cb()),
   onEnterMainframe: (cb) => ipcRenderer.on("mainframe:enter", () => cb()),

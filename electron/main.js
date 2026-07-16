@@ -151,6 +151,15 @@ ipcMain.handle("os:search", (_e, query, engine) => {
   return { ok: true };
 });
 
+// Open a URL directly in a clean guest window (skips the profile picker) — used
+// to play a chosen video.
+ipcMain.handle("os:open", (_e, url) => {
+  const u = String(url || "");
+  if (!/^https?:\/\//.test(u)) return { ok: false };
+  exec(`start "" chrome --guest "${u}"`, (err) => err && console.error("open failed:", err.message));
+  return { ok: true };
+});
+
 ipcMain.handle("os:command", (_e, command, arg) => {
   switch (command) {
     case "show_desktop":
