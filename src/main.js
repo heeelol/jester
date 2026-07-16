@@ -168,32 +168,39 @@ async function main() {
     }
   }
 
-  // Continuous, interruptible conversation using the PC mic (barge-in). Toggle
-  // with the mic button / voice hotkey. Phone speech interrupts too (each phone
-  // utterance calls converse(), which stops the current reply).
-  let convoOn = false;
-  async function toggleConversation() {
-    if (convoOn) {
-      convoOn = false; voice.stopConversation(); voice.stopSpeaking();
-      hud.status(idleStatus()); hud.subtitle("");
+  // Tap-to-record on the display mic (reliable). Tap to start, tap to stop →
+  // Whisper → converse (which interrupts any current reply). Speaking again on
+  // the phone also interrupts. Shows clear status so failures are visible.
+  let recorder = null;
+  async function micTap() {
+    if (!recorder) {
+      voice.stopSpeaking();
+      try {
+        recorder = await voice.startRecording();
+        hud.micButton.textContent = "⏹ STOP";
+        hud.status("listening"); hud.subtitle("Recording… click ⏹ STOP when done.");
+      } catch (err) {
+        recorder = null; console.error(err);
+        hud.subtitle("No microphone on this device — use your phone's 🎤 to talk.");
+      }
       return;
     }
+    const r = recorder; recorder = null;
+    hud.micButton.textContent = "🎤 SPEAK";
+    hud.status("thinking"); hud.subtitle("Transcribing…");
     try {
-      convoOn = true;
-      hud.status("listening"); hud.subtitle("Listening — speak any time, interrupt me freely.");
-      await voice.startConversation({ onTranscript: (t) => converse(t) });
+      const text = await r.stop();
+      if (text) converse(text);
+      else { hud.subtitle("No speech heard — try again."); hud.status(idleStatus()); }
     } catch (err) {
-      convoOn = false; console.error(err);
-      hud.status(idleStatus());
-      hud.subtitle("No microphone on this device — talk using your phone.");
-      speak("I can't find a microphone, sir. Talk to me through the phone instead.");
+      console.error(err); hud.subtitle("Transcribe failed: " + (err?.message || err)); hud.status(idleStatus());
     }
   }
-  hud.micButton.addEventListener("click", toggleConversation);
+  hud.micButton.addEventListener("click", micTap);
 
-  // Desktop-app hooks: global shortcut toggles conversation (works under the
+  // Desktop-app hooks: global shortcut = tap-to-record (works under the
   // click-through overlay), and native-driven mainframe enter/exit.
-  jester?.onVoiceListen?.(() => toggleConversation());
+  jester?.onVoiceListen?.(() => micTap());
   jester?.onEnterMainframe?.(() => enterMainframe(false));
   jester?.onExitMainframe?.(() => exitMainframe(false));
 

@@ -127,6 +127,33 @@ export function createVoice() {
     });
   }
 
+  // Tap-to-start / tap-to-stop recording — the reliable path (no silence
+  // detection). Returns { stop: () => Promise<text> }.
+  async function startRecording() {
+    ensure(); await ctx.resume?.();
+    const stream = await navigator.mediaDevices.getUserMedia(MIC);
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", ""].find((t) => t === "" || MediaRecorder.isTypeSupported(t));
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.start();
+    return {
+      stop: () => new Promise((resolve, reject) => {
+        rec.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          if (!chunks.length) return resolve("");
+          const type = rec.mimeType || "audio/webm";
+          try {
+            const r = await fetch("/stt", { method: "POST", headers: { "Content-Type": type }, body: new Blob(chunks, { type }) });
+            if (!r.ok) return reject(new Error("stt " + r.status));
+            resolve(((await r.json()).text || "").trim());
+          } catch (e) { reject(e); }
+        };
+        rec.stop();
+      }),
+    };
+  }
+
   // Continuous conversation with barge-in.
   let convo = null;
   async function startConversation({ onTranscript, onState } = {}) {
@@ -170,5 +197,5 @@ export function createVoice() {
   }
   function stopConversation() { convo?.stop?.(); convo = null; }
 
-  return { init, speak, stopSpeaking, isSpeaking, outputLevel, sentenceSpeaker, transcribeOnce, startConversation, stopConversation };
+  return { init, speak, stopSpeaking, isSpeaking, outputLevel, sentenceSpeaker, transcribeOnce, startRecording, startConversation, stopConversation };
 }
