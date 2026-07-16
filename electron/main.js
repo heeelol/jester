@@ -90,9 +90,12 @@ function exitMainframeAndNotify() { setMainframe(false); win?.webContents.send("
 
 ipcMain.handle("mainframe:set", (_e, on) => { setMainframe(!!on); return { ok: true }; });
 
+let lastApp = null; // the most recently launched app (for "hide from view")
 ipcMain.handle("os:launch", (_e, name) => {
-  const cmd = APPS[String(name || "").toLowerCase()];
+  const key = String(name || "").toLowerCase();
+  const cmd = APPS[key];
   if (!cmd) return { ok: false, error: "not allowlisted" };
+  lastApp = key;
   exec(cmd, (err) => err && console.error("launch failed:", err.message));
   return { ok: true };
 });
@@ -109,6 +112,16 @@ ipcMain.handle("os:close", (_e, name) => {
   const exe = EXES[String(name || "").toLowerCase()];
   if (!exe) return { ok: false, error: "not allowlisted" };
   exec(`taskkill /IM "${exe}" /F`, (err) => err && console.error("close failed:", err.message));
+  return { ok: true };
+});
+
+// Minimize an app's window ("hide from view") — defaults to the last-opened app.
+ipcMain.handle("os:hideApp", (_e, name) => {
+  const app = String(name || "").toLowerCase() || lastApp;
+  const exe = EXES[app];
+  if (!exe) return { ok: false, error: "unknown app" };
+  const proc = exe.replace(/\.exe$/i, "");
+  runPS(`$s='[DllImport("user32.dll")]public static extern bool ShowWindow(System.IntPtr h,int c);';$t=Add-Type -MemberDefinition $s -Name Win -Namespace H -PassThru;Get-Process '${proc}' -ErrorAction SilentlyContinue | ?{$_.MainWindowHandle -ne 0} | %{$t::ShowWindow($_.MainWindowHandle,6)}`);
   return { ok: true };
 });
 
@@ -185,7 +198,8 @@ ipcMain.handle("os:media", (_e, action) => {
     case "next_track":    sendVK(0xB0, 1); break;
     case "previous_track":sendVK(0xB1, 1); break;
     case "fullscreen":    sendKeys("f"); break;   // YouTube video fullscreen
-    case "minimize":      sendKeys("% n"); break; // Alt+Space, n
+    // Escape first so a fullscreen video exits fullscreen, then minimize the window.
+    case "minimize":      runPS(`$w=New-Object -ComObject WScript.Shell;$w.SendKeys('{ESC}');Start-Sleep -Milliseconds 250;$w.SendKeys('% n')`); break;
     case "maximize":      sendKeys("% x"); break; // Alt+Space, x
     default: return { ok: false };
   }

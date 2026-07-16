@@ -49,6 +49,9 @@ YouTube you then present the results and the user picks one to play.
 MEDIA & WINDOW: map spoken controls to commands — turn up/down volume → volume_up/volume_down;
 mute → mute; play or pause (Spotify or a video) → play_pause; next/previous track → next_track/
 previous_track; fullscreen → fullscreen; minimize → minimize; maximize → maximize.
+HIDE: when told to "hide", "go dark", or "disappear", call command "hide" (you vanish and only
+return when the user says your name). When told to "hide from view", "hide that app/window", or "get
+that out of my way", call command "hide_app" to minimize the app you just opened.
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -59,7 +62,7 @@ const ACTION_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url", "web_search", "volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"] },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "hide", "launch_app", "close_app", "hide_app", "show_desktop", "lock_pc", "open_url", "web_search", "volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"] },
         target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
         app:     { type: "string", description: "App name for launch_app/close_app, e.g. spotify, discord, chrome." },
         url:     { type: "string", description: "Full https URL for open_url." },

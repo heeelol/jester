@@ -71,7 +71,8 @@ async function main() {
     if (!mics) hud.subtitle("No microphone on this PC — use your phone's mic (🎤 on the phone) to talk.");
   }).catch(() => {});
   const avatar = createAvatar(scene.scene); // JESTER's pulsing presence — the only default model
-  let turn = 0; // conversation turn id — lets a new utterance interrupt an old reply
+  let turn = 0;       // conversation turn id — lets a new utterance interrupt an old reply
+  let hidden = false; // standby: JESTER is hidden and only wakes to the word "JESTER"
 
   // Where the avatar should drift to (voice "move to the top-left", or mainframe).
   const avatarTarget = new THREE.Vector3(0, 1.35, 0);
@@ -135,7 +136,7 @@ async function main() {
   };
 
   const MEDIA = new Set(["volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"]);
-  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc", "web_search", ...MEDIA]);
+  const PC_CMDS = new Set(["launch_app", "close_app", "hide_app", "open_url", "show_desktop", "lock_pc", "web_search", ...MEDIA]);
   const handlePc = (action) => {
     if (!jester) { speak("The mainframe needs the desktop app, sir — run me with 'npm run app'."); return; }
     if (!mainframe) { speak("Enter the mainframe first, sir."); return; }
@@ -143,6 +144,7 @@ async function main() {
     switch (action.command) {
       case "launch_app":   jester.launchApp(action.app || action.target); break;
       case "close_app":    jester.closeApp(action.app || action.target); break;
+      case "hide_app":     jester.hideApp(action.app || action.target); break;
       case "open_url":     jester.systemCommand("open_url", action.url); break;
       case "show_desktop": jester.systemCommand("show_desktop"); break;
       case "lock_pc":      jester.systemCommand("lock"); break;
@@ -190,6 +192,15 @@ async function main() {
     pendingResults = []; results.clear();
   }
 
+  // Standby: hide JESTER and only wake to the word "JESTER". Listening continues.
+  function doHide() {
+    hidden = true;
+    avatar.setVisible(false);
+    results.clear(); pendingResults = [];
+    hud.status("standby"); hud.subtitle(""); hud.userSaid("");
+    speak("Going dark, sir. Say my name to summon me.");
+  }
+
   let hands = [];       // latest hand landmarks (from phone or local camera)
   let localMode = false;
   let tracker = null;
@@ -211,6 +222,15 @@ async function main() {
       }
       if (myTurn !== turn) return;
       if (!transcript) { hud.status(idleStatus()); hud.subtitle(""); return; }
+
+      // While hidden, ignore everything until the wake word "JESTER".
+      if (hidden) {
+        if (!/\bjester\b/i.test(transcript)) { hud.status("standby"); return; }
+        hidden = false; avatar.setVisible(true); hud.status(idleStatus());
+        transcript = transcript.replace(/\bjester\b/ig, "").trim();
+        if (!transcript) { speak("At your service, sir."); return; }
+      }
+
       hud.userSaid(transcript); // show what you said
 
       // Choosing from YouTube results ("play number two", or by name).
@@ -240,7 +260,8 @@ async function main() {
             else if (action.url) action.command = "open_url";
             else if (action.app) action.command = "launch_app";
           }
-          if (action?.command === "move") moveAvatar(action.position || action.target);
+          if (action?.command === "hide") doHide();
+          else if (action?.command === "move") moveAvatar(action.position || action.target);
           else if (action?.command === "web_search") {
             if ((action.engine || "youtube") === "youtube") doYoutubeSearch(action.query);
             else handlePc(action); // google/web → visible browser typing

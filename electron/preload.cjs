@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("jester", {
   exitMainframe: () => ipcRenderer.invoke("mainframe:set", false),
   launchApp: (name) => ipcRenderer.invoke("os:launch", name),
   closeApp: (name) => ipcRenderer.invoke("os:close", name),
+  hideApp: (name) => ipcRenderer.invoke("os:hideApp", name),
   webSearch: (query, engine) => ipcRenderer.invoke("os:search", query, engine),
   openInBrowser: (url) => ipcRenderer.invoke("os:open", url),
   media: (action) => ipcRenderer.invoke("os:media", action),
