@@ -192,8 +192,18 @@ async function main() {
     pendingResults = []; results.clear();
   }
 
+  // Animated "built with" reveal for the demo conclusion.
+  let techTimer = null;
+  function showTechStack() {
+    const el = $("techstack");
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    speak("Built with MediaPipe, three-j-s, and OpenAI — all running locally, sir.");
+    clearTimeout(techTimer); techTimer = setTimeout(() => el.classList.remove("show"), 9000);
+  }
+
   // Standby: hide JESTER and only wake to the word "JESTER". Listening continues.
   function doHide() {
+    $("techstack").classList.remove("show");
     hidden = true;
     avatar.setVisible(false);
     results.clear(); pendingResults = [];
@@ -261,6 +271,7 @@ async function main() {
             else if (action.app) action.command = "launch_app";
           }
           if (action?.command === "hide") doHide();
+          else if (action?.command === "tech_stack") showTechStack();
           else if (action?.command === "move") moveAvatar(action.position || action.target);
           else if (action?.command === "web_search") {
             if ((action.engine || "youtube") === "youtube") doYoutubeSearch(action.query);
@@ -312,6 +323,7 @@ async function main() {
   jester?.onVoiceListen?.(() => micTap());
   jester?.onEnterMainframe?.(() => enterMainframe(false));
   jester?.onExitMainframe?.(() => exitMainframe(false));
+  jester?.onTechStack?.(() => showTechStack());
 
   // Pairing: generate a room, show the QR, connect as the display.
   // The phone can't reach localhost, so the phone URL uses a public base when one

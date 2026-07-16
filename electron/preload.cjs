@@ -18,4 +18,5 @@ contextBridge.exposeInMainWorld("jester", {
   onVoiceListen: (cb) => ipcRenderer.on("voice:listen", () => cb()),
   onEnterMainframe: (cb) => ipcRenderer.on("mainframe:enter", () => cb()),
   onExitMainframe: (cb) => ipcRenderer.on("mainframe:exit", () => cb()),
+  onTechStack: (cb) => ipcRenderer.on("techstack", () => cb()),
 });

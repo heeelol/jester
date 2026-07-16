@@ -63,6 +63,24 @@
     #mainframe-exit { display: none; position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 5; pointer-events: none;
       color: #ff8a5b; font-size: 12px; letter-spacing: 3px; text-shadow: 0 0 10px rgba(255,138,91,0.6); }
     body.mainframe #mainframe-exit { display: block; }
+    /* Animated "built with" tech-stack reveal (for the demo conclusion). */
+    #techstack { position: fixed; inset: 0; z-index: 6; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 30px; pointer-events: none; }
+    #techstack.show { display: flex; }
+    #techstack .ts-title { font-family: "Orbitron", sans-serif; font-size: 30px; letter-spacing: 12px; color: #eafcff; opacity: 0; text-shadow: 0 0 18px rgba(89,216,255,0.7), 0 2px 6px rgba(0,0,0,0.9); }
+    #techstack.show .ts-title { animation: tsTitle 0.6s ease forwards; }
+    #techstack .ts-row { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 900px; }
+    #techstack .chip { font-family: "Rajdhani", sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 1px; color: #59d8ff; padding: 12px 24px; border: 1px solid #59d8ff; border-radius: 30px; background: rgba(4,10,16,0.55); box-shadow: 0 0 18px rgba(89,216,255,0.35); text-shadow: 0 0 10px rgba(89,216,255,0.6); opacity: 0; transform: translateY(22px) scale(0.9); }
+    #techstack.show .chip { animation: tsChip 0.5s cubic-bezier(.2,.8,.2,1) forwards; }
+    #techstack.show .chip:nth-child(1) { animation-delay: 0.30s; }
+    #techstack.show .chip:nth-child(2) { animation-delay: 0.42s; }
+    #techstack.show .chip:nth-child(3) { animation-delay: 0.54s; }
+    #techstack.show .chip:nth-child(4) { animation-delay: 0.66s; }
+    #techstack.show .chip:nth-child(5) { animation-delay: 0.78s; }
+    #techstack.show .chip:nth-child(6) { animation-delay: 0.90s; }
+    #techstack.show .chip:nth-child(7) { animation-delay: 1.02s; }
+    #techstack.show .chip:nth-child(8) { animation-delay: 1.14s; }
+    @keyframes tsTitle { to { opacity: 1; } }
+    @keyframes tsChip { to { opacity: 1; transform: translateY(0) scale(1); } }
   </style>
 </head>
 <body>
@@ -96,6 +114,19 @@
   <div id="hud"></div>
   <div id="mainframe-badge">◆ MAINFRAME ONLINE ◆</div>
   <div id="mainframe-exit">Ctrl+Shift+M — EXIT MAINFRAME&nbsp;&nbsp;·&nbsp;&nbsp;Ctrl+Q — QUIT</div>
+
+  <div id="techstack">
+    <div class="ts-title">BUILT WITH</div>
+    <div class="ts-row">
+      <span class="chip">MediaPipe</span>
+      <span class="chip">three.js</span>
+      <span class="chip">OpenAI · GPT-4o</span>
+      <span class="chip">Whisper</span>
+      <span class="chip">Web Audio</span>
+      <span class="chip">WebSocket</span>
+      <span class="chip">Electron</span>
+    </div>
+  </div>
 
   <button id="files-btn" style="position:fixed;bottom:30px;left:30px;z-index:6;pointer-events:auto;display:none;
     background:rgba(4,6,10,.45);color:#59d8ff;border:1px solid #59d8ff;border-radius:30px;padding:12px 22px;

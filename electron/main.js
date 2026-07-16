@@ -234,6 +234,7 @@ app.whenReady().then(async () => {
   globalShortcut.register("CommandOrControl+Shift+Space", () => win?.webContents.send("voice:listen"));
   globalShortcut.register("CommandOrControl+Shift+Return", enterMainframeAndNotify);
   globalShortcut.register("CommandOrControl+Shift+M", exitMainframeAndNotify);
+  globalShortcut.register("CommandOrControl+Shift+T", () => win?.webContents.send("techstack"));
   globalShortcut.register("CommandOrControl+Q", () => app.quit());
 
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

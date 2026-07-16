@@ -52,6 +52,7 @@ previous_track; fullscreen → fullscreen; minimize → minimize; maximize → m
 HIDE: when told to "hide", "go dark", or "disappear", call command "hide" (you vanish and only
 return when the user says your name). When told to "hide from view", "hide that app/window", or "get
 that out of my way", call command "hide_app" to minimize the app you just opened.
+TECH STACK: when asked what you're built with / to show the tech stack / credits, call command "tech_stack".
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -62,7 +63,7 @@ const ACTION_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "hide", "launch_app", "close_app", "hide_app", "show_desktop", "lock_pc", "open_url", "web_search", "volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize"] },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "hide", "launch_app", "close_app", "hide_app", "show_desktop", "lock_pc", "open_url", "web_search", "volume_up", "volume_down", "mute", "play_pause", "next_track", "previous_track", "fullscreen", "minimize", "maximize", "tech_stack"] },
         target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
         app:     { type: "string", description: "App name for launch_app/close_app, e.g. spotify, discord, chrome." },
         url:     { type: "string", description: "Full https URL for open_url." },
