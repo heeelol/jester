@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J.E.S.T.E.R — Presenter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #00b140; font-family: "Rajdhani", system-ui, sans-serif; }
+    #c { display: block; }
+    #start { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; background: rgba(4,6,10,0.9); color: #59d8ff; text-align: center; }
+    #start button { background: transparent; color: #59d8ff; border: 1px solid #59d8ff; padding: 16px 40px; font-size: 16px; letter-spacing: 4px; border-radius: 3px; cursor: pointer; text-transform: uppercase; box-shadow: 0 0 20px rgba(89,216,255,0.3); }
+    #hint { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.85); font-size: 13px; letter-spacing: 2px; z-index: 5; }
+    #hint.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hint">Screen-record this window · Key <b>B</b>: background · <b>H</b>: hide this text</div>
+  <div id="start">
+    <div style="font-size:22px;letter-spacing:8px;">J.E.S.T.E.R PRESENTER</div>
+    <button id="go">Start (allow microphone)</button>
+    <div style="color:rgba(89,216,255,.6);font-size:13px;letter-spacing:2px;max-width:420px;">The jester's mouth moves as you talk. Green background is for chroma-key in CapCut.</div>
+  </div>
+  <script type="module" src="./src/presenter.js"></script>
+</body>
+</html>

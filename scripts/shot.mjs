@@ -1,0 +1,10 @@
+import puppeteer from "puppeteer";
+const url = process.argv[2], out = process.argv[3], w = +(process.argv[4]||800), h = +(process.argv[5]||1000);
+const b = await puppeteer.launch({ headless: "new", args: ["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--no-sandbox","--disable-dev-shm-usage"] });
+const p = await b.newPage();
+await p.setViewport({ width: w, height: h, deviceScaleFactor: 1.5 });
+await p.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
+await new Promise(r => setTimeout(r, 1200));
+await p.screenshot({ path: out });
+await b.close();
+console.log("shot ->", out);
