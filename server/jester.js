@@ -150,7 +150,10 @@ app.post("/stt", express.raw({ type: ["audio/*", "application/octet-stream"], li
     // ("Premature close"). This is why we bypass the SDK's uploader here.
     const form = new FormData();
     form.append("file", new Blob([req.body], { type: ct }), `audio.${ext}`);
-    form.append("model", "whisper-1");
+    form.append("model", "gpt-4o-transcribe");  // far more accurate than whisper-1
+    form.append("language", "en");
+    // Bias recognition toward JESTER's actual vocabulary.
+    form.append("prompt", "Commands for the JESTER assistant: enter the mainframe, exit the mainframe, open Spotify, open Discord, open Chrome, open Notepad, close Discord, close Spotify, show my desktop, lock the PC, pull up the reactor, scroll, focus, open, close.");
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
