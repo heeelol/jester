@@ -1,35 +1,27 @@
-// deck.js — the holographic media deck. Connect a folder (File System Access API,
-// Chrome) and its photos/videos fan out as glowing holographic tiles. Point your
-// index finger to highlight a tile, pinch to open it big, open your palm to close.
+// deck.js — a 3D media carousel you drive with one hand.
 //
-// This is 100% browser-side (the picked folder is read in the sandbox, nothing is
-// uploaded and no OS access is involved), so it can never affect your PC.
+//   • SCROLL  — move your hand left/right to spin through the photos/videos
+//               (cover-flow: the centred item is nearest and largest).
+//   • PINCH   — thumb + index together locks focus on the centred item.
+//   • OPEN    — release (open thumb + index) blows the focused item up big
+//               (videos play).
+//   • CLOSE   — pinch again while it's open to close it and resume scrolling.
 //
-// Media is rendered crisp: textures use max anisotropy, tiles are sized to each
-// file's real aspect ratio (no stretching), and the material bypasses tone-mapping
-// so colours stay true. The caller drops scene bloom while an item is open so the
-// photo/video reads sharp instead of hazy.
+// 100% browser-side: the folder is read locally, nothing is uploaded.
 
 import * as THREE from "three";
-import { toWorld } from "../interaction/space.js";
-import { pinchStrength, isSpread } from "../hands/gestures.js";
+import { pinchStrength } from "../hands/gestures.js";
+import { MIRROR } from "../interaction/space.js";
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|avif)$/i;
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|ogg)$/i;
-const MAX_TILES = 12;
-const H = 1.15;   // base tile height (world units); width follows the media aspect
-const OPEN = 3.6; // opened tile height
+const MAX_TILES = 40;
+const H = 1.3;          // tile height (world units); width follows the media aspect
+const SPACING = 2.0;    // horizontal gap between items
+const OPEN_H = 3.8;     // opened tile height
 
-function tilePosition(i, n) {
-  const cols = Math.min(n, 4);
-  const rows = Math.ceil(n / cols);
-  const col = i % cols, row = Math.floor(i / cols);
-  const x = (col - (cols - 1) / 2) * 2.3;
-  const y = ((rows - 1) / 2 - row) * 1.7 + 0.3;
-  return new THREE.Vector3(x, y, -Math.abs(col - (cols - 1) / 2) * 0.3);
-}
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 
-// A unit-plane wireframe frame (scales with its parent tile).
 function holoFrame() {
   return new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1)),
@@ -41,7 +33,10 @@ export function createDeck(scene, camera, { maxAnisotropy = 1 } = {}) {
   const group = new THREE.Group();
   scene.add(group);
   const tiles = [];
-  let opened = null, wasPinching = false, active = false;
+  let active = false;
+  let state = "scroll";     // scroll | focus | open
+  let scroll = 0, scrollTarget = 0, focusIndex = 0;
+  let wasClosed = false;
 
   const clear = () => {
     for (const t of tiles) {
@@ -52,17 +47,15 @@ export function createDeck(scene, camera, { maxAnisotropy = 1 } = {}) {
       t.mesh.material.map?.dispose();
       t.mesh.material.dispose();
     }
-    tiles.length = 0; opened = null;
+    tiles.length = 0;
+    state = "scroll"; scroll = scrollTarget = focusIndex = 0;
   };
 
-  // Uses a folder <input> (webkitdirectory) rather than showDirectoryPicker — the
-  // input is reliable in Electron/Chromium, the File System Access picker is not.
   function connect() {
     return new Promise((resolve, reject) => {
       const input = document.createElement("input");
-      input.type = "file";
-      input.multiple = true;
-      try { input.webkitdirectory = true; } catch { /* pick individual files */ }
+      input.type = "file"; input.multiple = true;
+      try { input.webkitdirectory = true; } catch { /* individual files */ }
       input.onchange = async () => {
         try {
           const picked = [...(input.files || [])]
@@ -70,16 +63,11 @@ export function createDeck(scene, camera, { maxAnisotropy = 1 } = {}) {
             .slice(0, MAX_TILES);
           if (!picked.length) { alert("No photos or videos in that folder."); return resolve(false); }
           clear();
-          for (let i = 0; i < picked.length; i++) {
-            const file = picked[i];
-            const kind = IMAGE_RE.test(file.name) ? "image" : "video";
-            const tile = await buildTile(file, kind, file.name);
-            tile.mesh.position.copy(tilePosition(i, picked.length));
-            tile.mesh.userData.home = tile.mesh.position.clone();
-            group.add(tile.mesh);
-            tiles.push(tile);
+          for (const file of picked) {
+            const tile = await buildTile(file, IMAGE_RE.test(file.name) ? "image" : "video");
+            group.add(tile.mesh); tiles.push(tile);
           }
-          active = true;
+          scrollTarget = scroll = 0; active = true;
           resolve(true);
         } catch (e) { reject(e); }
       };
@@ -88,98 +76,100 @@ export function createDeck(scene, camera, { maxAnisotropy = 1 } = {}) {
     });
   }
 
-  // Give a tile the aspect ratio of its media (unit plane + per-axis base scale).
-  const setAspect = (tile, aspect) => { tile.baseScale.set(H * aspect, H, 1); };
+  const setAspect = (tile, aspect) => tile.baseScale.set(H * aspect, H, 1);
 
-  async function buildTile(file, kind, name) {
+  async function buildTile(file, kind) {
     let texture, video = null, aspect = 1;
-
     if (kind === "image") {
       const bitmap = await createImageBitmap(file);
       aspect = bitmap.width / bitmap.height;
       texture = new THREE.Texture(bitmap);
       texture.colorSpace = THREE.SRGBColorSpace;
-      texture.magFilter = THREE.LinearFilter;
-      texture.minFilter = THREE.LinearMipmapLinearFilter;
-      texture.anisotropy = maxAnisotropy;
-      texture.generateMipmaps = true;
-      texture.needsUpdate = true;
+      texture.magFilter = THREE.LinearFilter; texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.anisotropy = maxAnisotropy; texture.generateMipmaps = true; texture.needsUpdate = true;
     } else {
       video = document.createElement("video");
       video.src = URL.createObjectURL(file);
       video.loop = true; video.playsInline = true; video.preload = "metadata";
       texture = new THREE.VideoTexture(video);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.anisotropy = maxAnisotropy;
+      texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = maxAnisotropy;
     }
-
-    // MeshBasicMaterial + toneMapped:false keeps photos true-colour and crisp
-    // (ACES tone-mapping is for the glowing holograms, not for real imagery).
     const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.85, toneMapped: false });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
     mesh.add(holoFrame());
-    mesh.userData = { kind, name, highlight: 0 };
-
     const tile = { mesh, kind, video, baseScale: new THREE.Vector3() };
     setAspect(tile, aspect);
-    if (video) video.addEventListener("loadedmetadata", () => {
-      if (video.videoWidth) setAspect(tile, video.videoWidth / video.videoHeight);
-    }, { once: true });
+    if (video) video.addEventListener("loadedmetadata", () => { if (video.videoWidth) setAspect(tile, video.videoWidth / video.videoHeight); }, { once: true });
     return tile;
   }
 
   const tmp = new THREE.Vector3();
-  const openPos = new THREE.Vector3(0, 0.3, 1.2);
+  const openPos = new THREE.Vector3(0, 0.3, 1.4);
 
   function update(hands) {
     if (!active) return;
+    const n = tiles.length;
     const hand = hands[0];
-    const tipWorld = hand ? toWorld(hand.landmarks[8]) : null; // index fingertip
-    const pinching = hand ? pinchStrength(hand.landmarks) < 0.32 : false;
-    const palmOpen = hand ? isSpread(hand.landmarks) : false;
 
-    // Highlight the tile nearest the fingertip.
-    let hot = null, hotD = 1.4;
-    if (tipWorld && !opened) {
-      for (const t of tiles) {
-        const d = Math.hypot(t.mesh.position.x - tipWorld.x, t.mesh.position.y - tipWorld.y);
-        if (d < hotD) { hot = t; hotD = d; }
+    if (hand) {
+      const strength = pinchStrength(hand.landmarks);
+      const closed = wasClosed ? strength < 0.45 : strength < 0.30; // hysteresis
+      const closeEdge = closed && !wasClosed;
+      const openEdge = !closed && wasClosed;
+      wasClosed = closed;
+
+      // Palm x (middle-finger knuckle) drives scrolling.
+      const px = hand.landmarks[9].x;
+      const handX = MIRROR ? 1 - px : px;
+
+      if (state === "scroll") {
+        if (!closed) scrollTarget = clamp((handX - 0.15) / 0.7, 0, 1) * (n - 1);
+        if (closeEdge) { state = "focus"; focusIndex = clamp(Math.round(scroll), 0, n - 1); }
+      } else if (state === "focus") {
+        if (openEdge) { state = "open"; openTile(focusIndex); }
+      } else if (state === "open") {
+        if (closeEdge) { closeTile(); state = "scroll"; }
       }
     }
 
-    for (const t of tiles) {
-      const target = t === hot ? 1 : 0;
-      t.mesh.userData.highlight += (target - t.mesh.userData.highlight) * 0.2;
-      if (t !== opened) {
-        t.mesh.position.lerp(t.mesh.userData.home, 0.2);
-        t.mesh.scale.copy(tmp.copy(t.baseScale).multiplyScalar(1 + t.mesh.userData.highlight * 0.12));
-        t.mesh.material.opacity = 0.6 + t.mesh.userData.highlight * 0.4;
+    scroll += (scrollTarget - scroll) * 0.18;
+    layout(n);
+  }
+
+  function layout(n) {
+    for (let i = 0; i < n; i++) {
+      const t = tiles[i];
+      const opened = state === "open" && i === focusIndex;
+      if (opened) {
+        t.mesh.position.lerp(openPos, 0.2);
+        t.mesh.scale.lerp(tmp.copy(t.baseScale).multiplyScalar(OPEN_H / H), 0.2);
+        t.mesh.rotation.y += (0 - t.mesh.rotation.y) * 0.2;
+        t.mesh.material.opacity = 1;
+        t.mesh.visible = true;
+        continue;
       }
-    }
-
-    const pinchEdge = pinching && !wasPinching;
-    wasPinching = pinching;
-
-    if (opened) {
-      opened.mesh.position.lerp(openPos, 0.2);
-      opened.mesh.scale.lerp(tmp.copy(opened.baseScale).multiplyScalar(OPEN / H), 0.2);
-      opened.mesh.material.opacity = 1;
-      if (palmOpen || pinchEdge) close();
-    } else if (pinchEdge && hot) {
-      open(hot);
+      const off = i - scroll;
+      if (Math.abs(off) > 4.5) { t.mesh.visible = false; continue; }
+      t.mesh.visible = true;
+      const focused = state === "focus" && i === focusIndex;
+      const target = tmp.set(off * SPACING, 0.3, -Math.abs(off) * 0.7 + (focused ? 0.8 : 0));
+      t.mesh.position.lerp(target, 0.2);
+      const bump = focused ? 1.35 : (Math.abs(off) < 0.5 ? 1.12 : 0.92);
+      const want = tmp.copy(t.baseScale).multiplyScalar(bump);
+      t.mesh.scale.lerp(want, 0.2);
+      t.mesh.rotation.y += (clamp(-off * 0.28, -0.9, 0.9) - t.mesh.rotation.y) * 0.2; // cover-flow tilt
+      t.mesh.material.opacity = clamp(1 - Math.abs(off) * 0.22, 0.25, 1) * (focused ? 1 : 0.9);
     }
   }
 
-  function open(tile) { opened = tile; if (tile.video) tile.video.play().catch(() => {}); }
-  function close() { if (opened?.video) opened.video.pause(); opened = null; }
+  function openTile(i) { const v = tiles[i]?.video; if (v) v.play().catch(() => {}); }
+  function closeTile() { const v = tiles[focusIndex]?.video; if (v) v.pause(); }
 
   return {
     connect,
     update,
     close: () => { clear(); active = false; },
     get active() { return active; },
-    get isOpen() { return !!opened; },
+    get isOpen() { return state === "open"; },
   };
 }

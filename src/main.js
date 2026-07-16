@@ -68,8 +68,7 @@ async function main() {
     console.log(`[jester] devices: ${mics} mic(s), ${cams} camera(s)`);
     if (!mics) hud.subtitle("No microphone on this PC — use your phone's mic (🎤 on the phone) to talk.");
   }).catch(() => {});
-  const avatar = createAvatar(scene.scene); // JESTER's pulsing presence
-  const reactor = scene.spawn("reactor");
+  const avatar = createAvatar(scene.scene); // JESTER's pulsing presence — the only default model
   let turn = 0; // conversation turn id — lets a new utterance interrupt an old reply
 
   // Holographic media deck: connect a folder → files fan out as tiles you browse
@@ -88,7 +87,7 @@ async function main() {
   });
 
   // A little power-on flourish once a hand source is live.
-  const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(reactor.position); filesBtn.style.display = "block"; };
+  const bootFlourish = () => { audio.sfx.boot(); effects.shockwave(avatar.object.position); filesBtn.style.display = "block"; };
 
   // ── Mainframe (Electron desktop overlay) ─────────────────────────────────
   // In the desktop app, `window.jester` is present. "Enter the mainframe" flips
@@ -121,12 +120,13 @@ async function main() {
     if (callNative) jester?.exitMainframe();
   };
 
-  const PC_CMDS = new Set(["launch_app", "open_url", "show_desktop", "lock_pc"]);
+  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc"]);
   const handlePc = (action) => {
     if (!jester) { speak("The mainframe needs the desktop app, sir — run me with 'npm run app'."); return; }
     if (!mainframe) { speak("Enter the mainframe first, sir."); return; }
     switch (action.command) {
       case "launch_app":   jester.launchApp(action.app || action.target); break;
+      case "close_app":    jester.closeApp(action.app || action.target); break;
       case "open_url":     jester.systemCommand("open_url", action.url); break;
       case "show_desktop": jester.systemCommand("show_desktop"); break;
       case "lock_pc":      jester.systemCommand("lock"); break;

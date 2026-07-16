@@ -36,10 +36,11 @@ Rules of the act:
 - Still actually do what's asked — the comedy is seasoning, not an excuse.
 HOLOGRAMS: when asked to show/summon, hide/dismiss, rotate, scale, or reset holograms, call
 perform_action (reactor, helmet, globe, cube).
-PC CONTROL (relevant once "in the mainframe"): when asked to open/launch an app, show the desktop,
-lock the PC, or open a website, call perform_action with command "launch_app" and the app name. Known
-apps: chrome, edge, firefox, spotify, discord, notepad, explorer, calculator, code, terminal,
-powershell, settings, camera, mail, whatsapp, telegram, steam, slack.
+PC CONTROL (relevant once "in the mainframe"): when asked to open/launch OR close/quit an app, show
+the desktop, lock the PC, or open a website, call perform_action with command "launch_app" or
+"close_app" (with the app name), or the matching system command. Known apps: chrome, edge, firefox,
+spotify, discord, notepad, explorer, calculator, code, terminal, powershell, settings, camera, mail,
+whatsapp, telegram, steam, slack.
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -50,7 +51,7 @@ const ACTION_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "launch_app", "show_desktop", "lock_pc", "open_url"] },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url"] },
         target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
         app:     { type: "string", description: "App name for launch_app, e.g. spotify, chrome, notepad." },
         url:     { type: "string", description: "Full https URL for open_url." },
@@ -122,9 +123,9 @@ app.post("/tts", async (req, res) => {
       headers: authJSON(),
       body: JSON.stringify({
         model: "gpt-4o-mini-tts",
-        voice: "onyx",
+        voice: "ash",
         input: text,
-        instructions: "A witty British butler with dry, playful sarcasm. Crisp, confident, a touch theatrical.",
+        instructions: "A sleek, confident AI concierge with a dry, playful wit — think a suave secret-agent's assistant. Smooth and cool, measured pace, a subtle smirk in the delivery. Never robotic.",
       }),
     });
     if (!r.ok) throw new Error(`tts ${r.status}`);

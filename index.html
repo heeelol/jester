@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>J.E.S.T.E.R — Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root { --holo: #59d8ff; --holo-dim: rgba(89,216,255,0.5); --bg: #04060a; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; color: var(--holo); }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif; font-weight: 600; color: var(--holo); }
     html { background: transparent; }           /* must stay transparent for the desktop overlay */
     body { background: var(--bg); }             /* opaque in browser phase; cleared in mainframe */
+    h1, #mainframe-badge, .topleft .name { font-family: "Orbitron", sans-serif; }
 
     #scene   { position: fixed; inset: 0; z-index: 1; }
     #overlay { position: fixed; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); z-index: 2; pointer-events: none; }
@@ -29,7 +33,7 @@
     #fx .bl { bottom: 16px; left: 16px; border-right: none; border-top: none; }
     #fx .br { bottom: 16px; right: 16px; border-left: none; border-top: none; }
 
-    #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; text-shadow: 0 0 8px rgba(89,216,255,0.55); }
+    #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; text-shadow: 0 1px 5px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.9), 0 0 12px rgba(89,216,255,0.5); }
 
     .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); gap: 34px; text-align: center; }
     .ring { width: 130px; height: 130px; border-radius: 50%; border: 1px solid var(--holo-dim); border-top-color: var(--holo); animation: spin 2.4s linear infinite; box-shadow: 0 0 30px rgba(89,216,255,0.3), inset 0 0 30px rgba(89,216,255,0.15); position: relative; }

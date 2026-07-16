@@ -95,6 +95,21 @@ ipcMain.handle("os:launch", (_e, name) => {
   return { ok: true };
 });
 
+// Close an allowlisted app by killing its process.
+const EXES = {
+  chrome: "chrome.exe", edge: "msedge.exe", firefox: "firefox.exe",
+  spotify: "Spotify.exe", discord: "Discord.exe", notepad: "notepad.exe",
+  explorer: "explorer.exe", files: "explorer.exe", calculator: "CalculatorApp.exe", calc: "CalculatorApp.exe",
+  code: "Code.exe", vscode: "Code.exe", terminal: "WindowsTerminal.exe", cmd: "cmd.exe", powershell: "powershell.exe",
+  camera: "WindowsCamera.exe", whatsapp: "WhatsApp.exe", telegram: "Telegram.exe", steam: "steam.exe", slack: "Slack.exe",
+};
+ipcMain.handle("os:close", (_e, name) => {
+  const exe = EXES[String(name || "").toLowerCase()];
+  if (!exe) return { ok: false, error: "not allowlisted" };
+  exec(`taskkill /IM "${exe}" /F`, (err) => err && console.error("close failed:", err.message));
+  return { ok: true };
+});
+
 ipcMain.handle("os:command", (_e, command, arg) => {
   switch (command) {
     case "show_desktop":

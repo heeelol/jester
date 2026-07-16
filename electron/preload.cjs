@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("jester", {
   enterMainframe: () => ipcRenderer.invoke("mainframe:set", true),
   exitMainframe: () => ipcRenderer.invoke("mainframe:set", false),
   launchApp: (name) => ipcRenderer.invoke("os:launch", name),
+  closeApp: (name) => ipcRenderer.invoke("os:close", name),
   systemCommand: (command, arg) => ipcRenderer.invoke("os:command", command, arg),
   onVoiceListen: (cb) => ipcRenderer.on("voice:listen", () => cb()),
   onEnterMainframe: (cb) => ipcRenderer.on("mainframe:enter", () => cb()),
