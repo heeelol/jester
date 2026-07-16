@@ -41,6 +41,11 @@ the desktop, lock the PC, or open a website, call perform_action with command "l
 "close_app" (with the app name), or the matching system command. Known apps: chrome, edge, firefox,
 spotify, discord, notepad, explorer, calculator, code, terminal, powershell, settings, camera, mail,
 whatsapp, telegram, steam, slack.
+MOVE YOURSELF: when asked to move/reposition, call perform_action command "move" with a position
+(top-left, top-right, bottom-left, bottom-right, center, left, right, top, bottom).
+WEB / YOUTUBE SEARCH: when asked to find/search/look up something online or on YouTube, call
+perform_action command "web_search" with the query and engine (youtube, google, or web). You will
+visibly type it into the browser.
 For anything else (questions, chat), just riff — no function call.`;
 
 const ACTION_TOOL = {
@@ -51,10 +56,13 @@ const ACTION_TOOL = {
     parameters: {
       type: "object",
       properties: {
-        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url"] },
+        command: { type: "string", enum: ["spawn", "dismiss", "rotate", "scale", "reset", "move", "launch_app", "close_app", "show_desktop", "lock_pc", "open_url", "web_search"] },
         target:  { type: "string", enum: ["reactor", "helmet", "globe", "cube", "all"], description: "Which hologram (spawn/dismiss)." },
-        app:     { type: "string", description: "App name for launch_app, e.g. spotify, chrome, notepad." },
+        app:     { type: "string", description: "App name for launch_app/close_app, e.g. spotify, discord, chrome." },
         url:     { type: "string", description: "Full https URL for open_url." },
+        position: { type: "string", enum: ["top-left", "top-right", "bottom-left", "bottom-right", "center", "left", "right", "top", "bottom"], description: "Where to move yourself on screen (for command 'move')." },
+        query:   { type: "string", description: "Search text for web_search." },
+        engine:  { type: "string", enum: ["youtube", "google", "web"], description: "Search engine for web_search." },
         amount:  { type: "number", description: "Optional magnitude for rotate/scale, e.g. 1.5." },
       },
       required: ["command"],

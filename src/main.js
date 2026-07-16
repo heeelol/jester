@@ -7,6 +7,7 @@
 // A single-device fallback ("use this device's camera") lets the same page run
 // standalone with a laptop webcam.
 
+import * as THREE from "three";
 import { createScene } from "./scene/objects.js";
 import { createCursors } from "./scene/cursors.js";
 import { createEffects } from "./scene/effects.js";
@@ -71,6 +72,16 @@ async function main() {
   const avatar = createAvatar(scene.scene); // JESTER's pulsing presence — the only default model
   let turn = 0; // conversation turn id — lets a new utterance interrupt an old reply
 
+  // Where the avatar should drift to (voice "move to the top-left", or mainframe).
+  const avatarTarget = new THREE.Vector3(0, 1.35, 0);
+  const AVATAR_POS = {
+    "top-left": [-3.6, 1.9, 0], "top-right": [3.6, 1.9, 0],
+    "bottom-left": [-3.6, -1.6, 0], "bottom-right": [3.6, -1.6, 0],
+    "center": [0, 0.6, 0], left: [-3.6, 0.6, 0], right: [3.6, 0.6, 0],
+    top: [0, 2.0, 0], bottom: [0, -1.6, 0],
+  };
+  const moveAvatar = (name) => { const p = AVATAR_POS[String(name || "").toLowerCase()]; if (p) avatarTarget.set(p[0], p[1], p[2]); };
+
   // Holographic media deck: connect a folder → files fan out as tiles you browse
   // with point + pinch. While the deck is active, gestures drive the deck (not
   // the hologram grab) so pinches don't fight.
@@ -99,9 +110,10 @@ async function main() {
   const enterMainframe = (callNative = true) => {
     if (mainframe) return;
     mainframe = true;
+    if (deck.active) { deck.close(); filesBtn.textContent = "◫ CONNECT FILES"; } // close any open folders
     document.body.classList.add("mainframe");
     scene.setOverlayMode(true);                                   // transparent over the desktop
-    avatar.object.position.set(3.6, 1.9, 0); avatar.object.scale.setScalar(0.5); // tuck into the top-right
+    avatarTarget.set(3.6, 1.9, 0); avatar.object.scale.setScalar(0.5); // tuck into the top-right
     hud.status("mainframe"); hud.flash("MAINFRAME ONLINE"); audio.sfx.boot();
     hud.subtitle("Listening — just speak. e.g. “open spotify”, “open discord”.");
     // Voice-activated: no clicking. Continuous listening with barge-in.
@@ -114,13 +126,13 @@ async function main() {
     mainframe = false;
     document.body.classList.remove("mainframe");
     scene.setOverlayMode(false);
-    avatar.object.position.set(0, 1.35, 0); avatar.object.scale.setScalar(1);
+    avatarTarget.set(0, 1.35, 0); avatar.object.scale.setScalar(1);
     voice.stopConversation(); voice.stopSpeaking();
     hud.status("online"); hud.subtitle(""); audio.sfx.dismiss();
     if (callNative) jester?.exitMainframe();
   };
 
-  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc"]);
+  const PC_CMDS = new Set(["launch_app", "close_app", "open_url", "show_desktop", "lock_pc", "web_search"]);
   const handlePc = (action) => {
     if (!jester) { speak("The mainframe needs the desktop app, sir — run me with 'npm run app'."); return; }
     if (!mainframe) { speak("Enter the mainframe first, sir."); return; }
@@ -130,6 +142,7 @@ async function main() {
       case "open_url":     jester.systemCommand("open_url", action.url); break;
       case "show_desktop": jester.systemCommand("show_desktop"); break;
       case "lock_pc":      jester.systemCommand("lock"); break;
+      case "web_search":   jester.webSearch(action.query, action.engine); break;
     }
   };
 
@@ -168,7 +181,19 @@ async function main() {
       let said = "";
       await askJester(transcript, {
         onSay: (delta) => { if (myTurn !== turn) return; said += delta; hud.subtitle(said); spk.feed(delta); },
-        onAction: (action) => { if (myTurn !== turn) return; if (PC_CMDS.has(action?.command)) handlePc(action); else applyAction(scene, action, fx); },
+        onAction: (action) => {
+          if (myTurn !== turn) return;
+          // The model occasionally omits `command`; infer it from the fields present.
+          if (action && !action.command) {
+            if (action.query) action.command = "web_search";
+            else if (action.position) action.command = "move";
+            else if (action.url) action.command = "open_url";
+            else if (action.app) action.command = "launch_app";
+          }
+          if (action?.command === "move") moveAvatar(action.position || action.target);
+          else if (PC_CMDS.has(action?.command)) handlePc(action);
+          else applyAction(scene, action, fx);
+        },
         onDone: () => { if (myTurn !== turn) return; spk.end(); hud.status(idleStatus()); },
       });
     } catch (err) {
@@ -293,7 +318,8 @@ async function main() {
       hud.handCount([]);
     }
     effects.update(dt);
-    avatar.update(voice.outputLevel(), t); // pulse with JESTER's voice
+    avatar.object.position.lerp(avatarTarget, 0.12); // glide toward its target spot
+    avatar.update(voice.outputLevel(), t);           // pulse with JESTER's voice
     scene.render(t);
     requestAnimationFrame(frame);
   }

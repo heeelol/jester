@@ -8,6 +8,8 @@
 
 import { app, BrowserWindow, ipcMain, globalShortcut, screen, session } from "electron";
 import { exec } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -107,6 +109,43 @@ ipcMain.handle("os:close", (_e, name) => {
   const exe = EXES[String(name || "").toLowerCase()];
   if (!exe) return { ok: false, error: "not allowlisted" };
   exec(`taskkill /IM "${exe}" /F`, (err) => err && console.error("close failed:", err.message));
+  return { ok: true };
+});
+
+// Visibly type a string into the focused window's address/search bar via
+// SendKeys (Ctrl+L focuses the browser omnibox), one character at a time so the
+// user watches JESTER "type". SendKeys specials are brace-escaped.
+let typeSeq = 0;
+function typeSequence(text) {
+  const esc = [...text].map((ch) => ("+^%~(){}[]".includes(ch) ? "{" + ch + "}" : ch));
+  const arr = esc.map((s) => "'" + s.replace(/'/g, "''") + "'").join(",");
+  const ps = [
+    "$w=New-Object -ComObject WScript.Shell",
+    "Start-Sleep -Milliseconds 200",
+    "$w.SendKeys('^l')",           // focus the browser address bar
+    "Start-Sleep -Milliseconds 400",
+    `$a=@(${arr})`,
+    "foreach($c in $a){$w.SendKeys($c);Start-Sleep -Milliseconds 45}",
+    "Start-Sleep -Milliseconds 300",
+    "$w.SendKeys('~')",            // Enter
+  ].join("\n");
+  const tmp = path.join(os.tmpdir(), `jester-type-${process.pid}-${typeSeq++}.ps1`);
+  try {
+    writeFileSync(tmp, ps, "utf8");
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmp}"`, () => { try { unlinkSync(tmp); } catch { /* ignore */ } });
+  } catch (e) { console.error("type failed:", e.message); }
+}
+
+// Search: open/focus the browser, then visibly type the results URL and Enter.
+ipcMain.handle("os:search", (_e, query, engine) => {
+  const q = String(query || "").trim();
+  if (!q) return { ok: false };
+  const enc = q.replace(/\s+/g, "+");
+  const url = engine === "google" ? `https://www.google.com/search?q=${enc}`
+    : engine === "web" ? `https://duckduckgo.com/?q=${enc}`
+    : `https://www.youtube.com/results?search_query=${enc}`;
+  exec("start chrome", () => {});          // open/focus Chrome
+  setTimeout(() => typeSequence(url), 1500); // let it focus, then type
   return { ok: true };
 });
 
