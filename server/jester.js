@@ -278,8 +278,12 @@ wss.on("connection", (ws) => {
     const r = rooms.get(ws.room);
     if (!r) return;
     r[ws.role]?.delete(ws);
-    const peers = ws.role === "phone" ? r.display : r.phone;
-    peers.forEach((p) => send(p, { type: "peer", role: ws.role, state: "left" }));
+    // Only announce "left" if NO socket of this role remains — otherwise a phone
+    // reload (old socket closing after the new one joined) would falsely unpair.
+    if (r[ws.role]?.size === 0) {
+      const peers = ws.role === "phone" ? r.display : r.phone;
+      peers.forEach((p) => send(p, { type: "peer", role: ws.role, state: "left" }));
+    }
     if (r.display.size === 0 && r.phone.size === 0) rooms.delete(ws.room);
   });
 });

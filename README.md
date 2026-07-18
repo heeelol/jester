@@ -17,10 +17,19 @@ No special hardware — just a webcam (or phone), and Chrome.
 
 ## What it does
 
-- **Pinch to grab** a hologram and move it.
-- **Two-handed pinch** to scale (distance between hands) and rotate (angle between hands).
-- **Speak** — "pull up the reactor", "dismiss everything", "rotate that" — and JESTER
-  replies in voice while acting on the display.
+- **Pinch to grab** a hologram and move it; **two-handed pinch** to scale (hand
+  distance) and rotate (hand angle).
+- **Speak to JESTER** — it replies in a synthesized voice *and* acts on the display:
+  spawn / dismiss / rotate / scale holograms and reposition its own avatar.
+- **3D media carousel** — scroll your photos & videos with hand gestures, pinch to
+  focus, open thumb + index to open one.
+- **Voice web / YouTube search** — JESTER types the query into the browser, pulls
+  thumbnails into an in-app gallery, then you pick by voice ("play number two").
+- **Control your PC** (via the desktop overlay) — "open Spotify", play / pause,
+  next track, volume, fullscreen, minimize, launch / close apps, lock the PC.
+- **"JESTER, hide"** drops it to standby until you say the wake word again.
+- **"What are you built with?"** triggers an animated **3D tech-stack reveal** — a
+  floating arc of holographic emblems, one true to each technology.
 
 ## The interesting code
 
@@ -42,9 +51,13 @@ over the wire — the input source is abstracted behind one `hands` array.
 
 - **Hand tracking:** MediaPipe Tasks Vision (`HandLandmarker`), 21 landmarks/hand.
 - **Rendering:** three.js + a custom holographic shader + Unreal bloom post-processing.
-- **Voice:** Web Speech API (recognition + synthesis) — no cloud STT/TTS.
-- **Brain:** OpenAI (`gpt-4o-mini`) via a tiny Express proxy, streamed.
-- **Pairing:** WebSocket relay (phone → display).
+- **Voice:** OpenAI end-to-end — `gpt-4o-transcribe` (speech-to-text) and
+  `gpt-4o-mini-tts` (voice "ash"), with barge-in so you can talk over it.
+- **Brain:** OpenAI `gpt-4o-mini` via a tiny Express proxy — one call returns both
+  a spoken line and a structured scene/PC action (function calling).
+- **Desktop overlay:** an Electron shell ("mainframe") that floats JESTER over the
+  live desktop and routes voice commands to OS control (media keys, app launch, …).
+- **Pairing:** WebSocket relay (phone → display), stable room code.
 
 ## Run it — solo
 
@@ -77,18 +90,31 @@ This prints an `https://…trycloudflare.com` URL. Then:
 3. Prop the phone up so it sees both hands — you're now controlling the display.
    Tap the phone's 🎤 to give voice commands.
 
-> **iPhone note:** hand-tracking works, but Safari has no reliable speech
-> recognition — voice commands need **Android Chrome**. (Tailscale Funnel works
-> as an HTTPS tunnel too: `tailscale funnel 3000`.)
+> **Phone note:** the phone records mic audio and sends it to the server's `/stt`
+> endpoint (OpenAI `gpt-4o-transcribe`), so voice works on any phone — no reliance
+> on the browser's Web Speech. (Tailscale Funnel works as an HTTPS tunnel too:
+> `tailscale funnel 3000`.)
+
+## Desktop overlay — "enter the mainframe"
+
+```bash
+npm run app        # launches the Electron shell
+```
+
+An Electron window floats JESTER as a **transparent overlay over your live
+desktop**. Say *"enter the mainframe"* (or `Ctrl+Shift+M`) and JESTER tucks into a
+corner, listens hands-free, and controls your PC by voice — open apps, media keys,
+volume, fullscreen, web/YouTube search, lock. `Escape` exits the overlay.
 
 ## Architecture
 
 ```
-PHONE                         SERVER                    DISPLAY (big screen)
-camera ─▶ MediaPipe ─▶ hands ─┐
-mic ─▶ Web Speech ─▶ speech ──┤─▶ /ws relay ─▶ hands ─▶ controller ─▶ holograms
-                              │                 speech ─▶ JESTER ─▶ voice + actions
-                              └─▶ /jester ─▶ OpenAI ─▶ say + action
+PHONE                       SERVER                           DISPLAY (big screen)
+camera ▶ MediaPipe ▶ hands ─┐
+mic ▶ record ▶ /stt ────────┤  gpt-4o-transcribe → transcript
+                            ├▶ /ws relay  ▶ hands ▶ controller ▶ holograms
+                            ├▶ /jester    ▶ gpt-4o-mini     ▶ spoken line + action
+                            └▶ /tts       ▶ gpt-4o-mini-tts ▶ voice (played on display)
 ```
 
 ## Tuning

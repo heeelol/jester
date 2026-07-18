@@ -23,6 +23,7 @@ import { askJester } from "./voice/jester.js";
 import { QUIPS, pick } from "./voice/quips.js";
 import { createVoice } from "./voice/engine.js";
 import { createAvatar } from "./scene/avatar.js";
+import { createTechStack } from "./scene/techstack.js";
 import { createLink } from "./net/link.js";
 import { report } from "./report.js";
 
@@ -71,6 +72,7 @@ async function main() {
     if (!mics) hud.subtitle("No microphone on this PC — use your phone's mic (🎤 on the phone) to talk.");
   }).catch(() => {});
   const avatar = createAvatar(scene.scene); // JESTER's pulsing presence — the only default model
+  const techStack = createTechStack(scene.scene); // 3D "built with" emblem reveal
   let turn = 0;       // conversation turn id — lets a new utterance interrupt an old reply
   let hidden = false; // standby: JESTER is hidden and only wakes to the word "JESTER"
 
@@ -192,18 +194,18 @@ async function main() {
     pendingResults = []; results.clear();
   }
 
-  // Animated "built with" reveal for the demo conclusion.
+  // Animated "built with" reveal for the demo conclusion — a 3D arc of
+  // holographic emblems, one true to each technology.
   let techTimer = null;
   function showTechStack() {
-    const el = $("techstack");
-    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    techStack.show();
     speak("Built with MediaPipe, three-j-s, and OpenAI — all running locally, sir.");
-    clearTimeout(techTimer); techTimer = setTimeout(() => el.classList.remove("show"), 9000);
+    clearTimeout(techTimer); techTimer = setTimeout(() => techStack.hide(), 11000);
   }
 
   // Standby: hide JESTER and only wake to the word "JESTER". Listening continues.
   function doHide() {
-    $("techstack").classList.remove("show");
+    techStack.hide();
     hidden = true;
     avatar.setVisible(false);
     results.clear(); pendingResults = [];
@@ -325,11 +327,16 @@ async function main() {
   jester?.onExitMainframe?.(() => exitMainframe(false));
   jester?.onTechStack?.(() => showTechStack());
 
-  // Pairing: generate a room, show the QR, connect as the display.
-  // The phone can't reach localhost, so the phone URL uses a public base when one
-  // is provided (?pub=<tunnel> — set by the Electron shell via JESTER_PUBLIC).
-  const room = randomRoom();
-  const phoneBase = new URLSearchParams(location.search).get("pub") || location.origin;
+  // Pairing: reuse a STABLE room, show the QR, connect as the display.
+  // The room persists (localStorage / ?room=) so relaunching the app keeps the
+  // same code — a QR you scanned earlier stays valid instead of pointing at a
+  // dead room. The phone can't reach localhost, so the phone URL uses a public
+  // base when one is provided (?pub=<tunnel> — set via JESTER_PUBLIC).
+  const params = new URLSearchParams(location.search);
+  let room = params.get("room");
+  if (!room) { try { room = localStorage.getItem("jesterRoom"); } catch {} }
+  if (!room) { room = randomRoom(); try { localStorage.setItem("jesterRoom", room); } catch {} }
+  const phoneBase = params.get("pub") || location.origin;
   const phoneURL = `${phoneBase}/phone.html?room=${room}`;
   $("pair-code").textContent = room;
   $("pair-url").textContent = phoneURL;
@@ -351,6 +358,8 @@ async function main() {
           bootFlourish();
           speak("Controller linked. Try not to embarrass us both, sir.");
         } else if (msg.state === "left") {
+          // Controller dropped — bring the QR back so it can be re-paired.
+          $("pair").style.display = "flex";
           hud.status("standby"); hud.subtitle("Controller disconnected");
         }
       }
@@ -407,6 +416,7 @@ async function main() {
     effects.update(dt);
     avatar.object.position.lerp(avatarTarget, 0.12); // glide toward its target spot
     avatar.update(voice.outputLevel(), t);           // pulse with JESTER's voice
+    techStack.update(t);                              // 3D "built with" reveal
     scene.render(t);
     requestAnimationFrame(frame);
   }
