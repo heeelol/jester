@@ -31,6 +31,38 @@ No special hardware — just a webcam (or phone), and Chrome.
 - **"What are you built with?"** triggers an animated **3D tech-stack reveal** — a
   floating arc of holographic emblems, one true to each technology.
 
+## Commands
+
+Just talk to JESTER — one model call maps your phrasing to a structured action
+(`server/jester.js`, `perform_action`). You don't have to say these verbatim; the
+examples are just the intent.
+
+| Say something like… | Action | `command` |
+| --- | --- | --- |
+| "pull up the reactor" / helmet / globe / cube | spawn a hologram | `spawn` |
+| "dismiss that" / "get rid of everything" | remove one / all | `dismiss` |
+| "reset the scene" | clear all holograms | `reset` |
+| "rotate that" / "spin it" | rotate the last hologram | `rotate` |
+| "make it bigger / smaller" | scale the last hologram | `scale` |
+| "move to the top-left" (also center, left, right, …) | reposition the JESTER avatar | `move` |
+| "search YouTube for lo-fi beats" / "google …" | web / YouTube search, thumbnails + pick by voice | `web_search` |
+| "open youtube.com" | open a URL in the browser | `open_url` |
+| "open Spotify" / Discord / Chrome … | launch an app | `launch_app` |
+| "close Spotify" | close an app | `close_app` |
+| "hide that out of my way" | minimize the app you just opened | `hide_app` |
+| "show the desktop" | minimize everything | `show_desktop` |
+| "lock the PC" | lock Windows | `lock_pc` |
+| "play" / "pause" | play-pause (Spotify or video) | `play_pause` |
+| "next track" / "previous track" | skip / back | `next_track` / `previous_track` |
+| "volume up" / "volume down" / "mute" | system volume | `volume_up` / `volume_down` / `mute` |
+| "fullscreen" / "minimize" / "maximize" | window control (minimize also exits fullscreen) | `fullscreen` / `minimize` / `maximize` |
+| "JESTER, hide" / "go dark" | standby until you say the wake word "JESTER" | `hide` |
+| "what are you built with?" | animated 3D tech-stack reveal | `tech_stack` |
+
+> App / media / window / lock commands run through the **desktop overlay**
+> (`npm run app`), which is where JESTER can touch the OS. In the plain browser
+> build, the hologram, avatar, search, and tech-stack commands still work.
+
 ## The interesting code
 
 Built around small, readable engines:
